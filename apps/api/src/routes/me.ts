@@ -15,6 +15,36 @@ const SummarySchema = z
   })
   .openapi('Summary')
 
+const BookSchema = z
+  .object({
+    id: z.uuid(),
+    md5: z.string(),
+    title: z.string(),
+    authors: z.string().nullable(),
+    series: z.string().nullable(),
+    language: z.string().nullable(),
+    total_read_seconds: z.number().int(),
+    last_read_at: z.iso.datetime().nullable(),
+    last_page: z.number().int().nullable(),
+    total_pages: z.number().int().nullable(),
+    progress: z.number().min(0).max(1).openapi({ description: 'Last page read / total pages' }),
+  })
+  .openapi('Book')
+
+const getBooks = createRoute({
+  method: 'get',
+  path: '/books',
+  tags: ['me'],
+  middleware: [requireSession] as const,
+  responses: {
+    200: {
+      content: { 'application/json': { schema: z.object({ books: z.array(BookSchema) }) } },
+      description: 'Books, most recently read first',
+    },
+    401: errorResponse('Not signed in'),
+  },
+})
+
 const getMe = createRoute({
   method: 'get',
   path: '/',
@@ -43,6 +73,60 @@ export const meRoutes = new OpenAPIHono<AppEnv>()
   .openapi(getMe, (c) => {
     const { id, email, name } = c.get('user')
     return c.json({ id, email, name }, 200)
+  })
+  .openapi(getBooks, async (c) => {
+    const userId = c.get('user').id
+    // Latest page_stats row per book gives the current position; totals from all rows.
+    const rows = await db.execute<{
+      id: string
+      md5: string
+      title: string
+      authors: string | null
+      series: string | null
+      language: string | null
+      total_read_seconds: string
+      last_read_at: Date | null
+      last_page: number | null
+      total_pages: number | null
+    }>(sql`
+      SELECT b.id, b.md5, b.title, b.authors, b.series, b.language,
+             coalesce(t.seconds, 0) AS total_read_seconds,
+             l.start_time AS last_read_at, l.page AS last_page,
+             coalesce(l.total_pages, b.pages) AS total_pages
+      FROM ${books} b
+      LEFT JOIN (
+        SELECT book_id, sum(duration) AS seconds FROM ${pageStats}
+        WHERE user_id = ${userId} GROUP BY book_id
+      ) t ON t.book_id = b.id
+      LEFT JOIN (
+        SELECT DISTINCT ON (book_id) book_id, start_time, page, total_pages FROM ${pageStats}
+        WHERE user_id = ${userId} ORDER BY book_id, start_time DESC
+      ) l ON l.book_id = b.id
+      WHERE b.user_id = ${userId}
+      ORDER BY l.start_time DESC NULLS LAST, b.title
+    `)
+    return c.json(
+      {
+        books: rows.rows.map((r) => {
+          const total = r.total_pages ?? 0
+          const progress = total > 0 && r.last_page ? Math.min(r.last_page / total, 1) : 0
+          return {
+            id: r.id,
+            md5: r.md5,
+            title: r.title,
+            authors: r.authors,
+            series: r.series,
+            language: r.language,
+            total_read_seconds: Number(r.total_read_seconds),
+            last_read_at: r.last_read_at ? new Date(r.last_read_at).toISOString() : null,
+            last_page: r.last_page,
+            total_pages: r.total_pages,
+            progress,
+          }
+        }),
+      },
+      200,
+    )
   })
   .openapi(getSummary, async (c) => {
     const userId = c.get('user').id
