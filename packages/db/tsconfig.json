@@ -1,0 +1,4 @@
+{
+  "extends": "@koreader-dashboard/typescript-config/node.json",
+  "include": ["src", "drizzle.config.ts"]
+}

@@ -1,0 +1,23 @@
+name: Feature
+description: New feature or improvement
+labels: ['type: feature']
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What and why.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is included, and what is explicitly out of scope.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: '- [ ] ...'
+    validations:
+      required: true

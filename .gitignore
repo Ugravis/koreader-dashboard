@@ -1,0 +1,41 @@
+# Personal notes
+notes.md
+notes/
+
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+dist/
+out/
+build/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# Env
+.env
+.env*.local
+!.env.example
+
+# Data (personal reading stats)
+*.sqlite3
+*.sqlite
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / IDE
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Build artifacts
+*.koplugin.zip

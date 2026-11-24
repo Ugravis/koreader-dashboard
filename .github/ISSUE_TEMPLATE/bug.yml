@@ -1,0 +1,34 @@
+name: Bug
+description: Something does not work as expected
+labels: ['type: bug']
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [plugin, api, web, admin, infra]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: KOReader version and device (if plugin)
+      placeholder: 2026.07.1, Kindle Paperwhite 2024
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant excerpt of crash.log or API logs.
+      render: text
