@@ -15,13 +15,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useI18n } from '@/i18n/provider'
 import { useLiveVersion } from '@/lib/live-events'
 import { api, ApiError, type Device } from '@/lib/api'
-import { formatDate } from '@/lib/format'
 
 type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; devices: Device[] }
 
 export function DeviceList() {
+  const { t, format } = useI18n()
+  const d = t.settings.devices
   const [state, setState] = useState<State>({ status: 'loading' })
   const [target, setTarget] = useState<Device | null>(null)
   const [revoking, setRevoking] = useState(false)
@@ -55,7 +57,7 @@ export function DeviceList() {
           : s,
       )
     } catch {
-      setError('Could not revoke the device. Try again.')
+      setError(d.revokeError)
     } finally {
       setRevoking(false)
       setTarget(null)
@@ -75,7 +77,7 @@ export function DeviceList() {
   if (state.status === 'error') {
     return (
       <p role="alert" className="text-sm text-destructive">
-        Could not load your devices. Try again later.
+        {d.loadError}
       </p>
     )
   }
@@ -84,9 +86,7 @@ export function DeviceList() {
     return (
       <Card>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            No linked e-reader yet. Follow the steps below, then enter the code with Link a device.
-          </p>
+          <p className="text-sm text-muted-foreground">{d.empty}</p>
         </CardContent>
       </Card>
     )
@@ -100,21 +100,24 @@ export function DeviceList() {
         </p>
       )}
       <ul className="flex flex-col gap-3">
-        {state.devices.map((d) => (
-          <li key={d.id}>
+        {state.devices.map((device) => (
+          <li key={device.id}>
             <Card>
               <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
                   <Tablet className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
                   <div className="flex flex-col gap-0.5">
-                    <span className="font-medium">{d.name}</span>
+                    <span className="font-medium">{device.name}</span>
+                    {device.model && (
+                      <span className="text-sm text-muted-foreground">{device.model}</span>
+                    )}
                     <span className="text-sm text-muted-foreground">
-                      Last sync: {formatDate(d.last_sync_at)}
+                      {d.lastSync(format.dateTime(device.last_sync_at))}
                     </span>
                   </div>
                 </div>
-                <Button variant="outline" onClick={() => setTarget(d)}>
-                  Revoke
+                <Button variant="outline" onClick={() => setTarget(device)}>
+                  {d.revoke}
                 </Button>
               </CardContent>
             </Card>
@@ -127,20 +130,17 @@ export function DeviceList() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Revoke {target?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This e-reader stops syncing. It is unlinked at its next sync and must be linked again
-              to resume. Your reading statistics are kept.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{d.revokeTitle(target?.name ?? '')}</AlertDialogTitle>
+            <AlertDialogDescription>{d.revokeText}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={revoking}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={revoking}>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={revoking}
               onClick={() => target && revoke(target.id)}
             >
-              {revoking ? 'Revoking…' : 'Revoke'}
+              {revoking ? d.revoking : d.revoke}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

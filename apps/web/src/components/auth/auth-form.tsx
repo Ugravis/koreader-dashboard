@@ -14,34 +14,19 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useI18n } from '@/i18n/provider'
 import { api, ApiError } from '@/lib/api'
 
 type Mode = 'sign-in' | 'sign-up'
-
-const copy = {
-  'sign-in': {
-    title: 'Sign in',
-    description: 'Access your reading dashboard.',
-    submit: 'Sign in',
-    switchText: 'No account yet?',
-    switchLabel: 'Sign up',
-    switchHref: '/sign-up',
-  },
-  'sign-up': {
-    title: 'Create an account',
-    description: 'Sync your KOReader statistics.',
-    submit: 'Create account',
-    switchText: 'Already have an account?',
-    switchLabel: 'Sign in',
-    switchHref: '/sign-in',
-  },
-} as const
 
 export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo: string }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
-  const t = copy[mode]
+  const i18n = useI18n()
+  const { href } = i18n
+  const t = mode === 'sign-in' ? i18n.t.auth.signIn : i18n.t.auth.signUp
+  const switchPath = mode === 'sign-in' ? '/sign-up' : '/sign-in'
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -56,14 +41,14 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo: string 
       } else {
         await api.signIn({ email, password })
       }
-      router.push(redirectTo)
+      router.push(href(redirectTo))
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Network error, try again.')
+      setError(err instanceof ApiError ? err.message : i18n.t.common.networkError)
       setPending(false)
     }
   }
 
-  const switchHref = `${t.switchHref}?redirect=${encodeURIComponent(redirectTo)}`
+  const switchHref = `${href(switchPath)}?redirect=${encodeURIComponent(redirectTo)}`
 
   return (
     <Card className="w-full max-w-sm">
@@ -75,16 +60,16 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo: string 
         <CardContent className="flex flex-col gap-4">
           {mode === 'sign-up' && (
             <div className="flex flex-col gap-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">{i18n.t.auth.name}</Label>
               <Input id="name" name="name" autoComplete="name" required />
             </div>
           )}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{i18n.t.auth.email}</Label>
             <Input id="email" name="email" type="email" autoComplete="email" required />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{i18n.t.auth.password}</Label>
             <Input
               id="password"
               name="password"
@@ -102,7 +87,7 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo: string 
         </CardContent>
         <CardFooter className="mt-4 flex flex-col gap-3">
           <Button type="submit" size="lg" className="w-full" disabled={pending}>
-            {pending ? 'Please wait…' : t.submit}
+            {pending ? i18n.t.common.pleaseWait : t.submit}
           </Button>
           <p className="text-sm text-muted-foreground">
             {t.switchText}{' '}

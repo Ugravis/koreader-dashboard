@@ -3,6 +3,7 @@ import { and, eq, inArray, schema, sql } from '@koreader-dashboard/db'
 import { db } from '../db.ts'
 import { groupBooks, loadBookRows } from '../lib/books.ts'
 import { HttpError } from '../lib/errors.ts'
+import { loadReadingStats, safeTimeZone } from '../lib/stats.ts'
 import { errorResponse } from '../lib/openapi.ts'
 import { requireSession } from '../middleware/session.ts'
 import type { AppEnv } from '../types.ts'
@@ -125,6 +126,39 @@ const getSummary = createRoute({
   responses: { 200: json(SummarySchema, 'Totals'), 401: errorResponse('Not signed in') },
 })
 
+const DayStatSchema = z.object({
+  date: z.string().openapi({ example: '2026-11-24' }),
+  seconds: z.number().int(),
+  pages: z.number().int(),
+})
+
+const StatsSchema = z
+  .object({
+    timezone: z.string(),
+    days: z.array(DayStatSchema).openapi({ description: 'Last days, oldest first' }),
+    by_hour: z.array(z.number().int()).openapi({ description: 'Seconds per hour, 0-23' }),
+    by_weekday: z.array(z.number().int()).openapi({ description: 'Seconds per day, Monday first' }),
+    reading_days: z.number().int(),
+    current_streak: z.number().int(),
+    longest_streak: z.number().int(),
+    first_read_on: z.string().nullable(),
+  })
+  .openapi('ReadingStats')
+
+const getStats = createRoute({
+  tags: ['me'],
+  middleware: [requireSession] as const,
+  method: 'get',
+  path: '/stats',
+  request: {
+    query: z.object({
+      tz: z.string().max(64).optional().openapi({ description: 'IANA time zone, default UTC' }),
+      days: z.coerce.number().int().min(7).max(366).default(30),
+    }),
+  },
+  responses: { 200: json(StatsSchema, 'Reading stats'), 401: errorResponse('Not signed in') },
+})
+
 const { annotations, bookCovers, books } = schema
 
 export const meRoutes = new OpenAPIHono<AppEnv>()
@@ -189,4 +223,8 @@ export const meRoutes = new OpenAPIHono<AppEnv>()
       },
       200,
     )
+  })
+  .openapi(getStats, async (c) => {
+    const { tz, days } = c.req.valid('query')
+    return c.json(await loadReadingStats(db, c.get('user').id, safeTimeZone(tz), days), 200)
   })

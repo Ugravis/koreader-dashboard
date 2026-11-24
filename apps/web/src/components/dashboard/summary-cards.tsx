@@ -2,81 +2,47 @@
 
 import { BookCheck, BookOpen, Clock, FileText } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
 import { buttonVariants } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { useLiveVersion } from '@/lib/live-events'
-import { api, ApiError, type Summary } from '@/lib/api'
-import { formatDuration, formatNumber } from '@/lib/format'
-
-type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; summary: Summary }
+import { Card, CardContent } from '@/components/ui/card'
+import { useI18n } from '@/i18n/provider'
+import { api } from '@/lib/api'
+import { useLiveQuery } from '@/lib/use-live-query'
+import { STAT_GRID, StatTile } from './stat-tile'
 
 export function SummaryCards() {
-  const [state, setState] = useState<State>({ status: 'loading' })
-  // Refetch when a device sends data; the current data stays on screen meanwhile.
-  const liveVersion = useLiveVersion()
-
-  useEffect(() => {
-    let active = true
-    api
-      .getSummary()
-      .then((summary) => active && setState({ status: 'ready', summary }))
-      .catch((err) => {
-        // 401: the shell redirects to sign-in, keep the skeleton meanwhile.
-        if (active && !(err instanceof ApiError && err.status === 401))
-          setState({ status: 'error' })
-      })
-    return () => {
-      active = false
-    }
-  }, [liveVersion])
+  const { t: i18n, format, href } = useI18n()
+  const t = i18n.overview
+  const state = useLiveQuery(() => api.getSummary(), [])
 
   if (state.status === 'error') {
     return (
       <p role="alert" className="text-sm text-destructive">
-        Could not load your statistics. Try again later.
+        {i18n.common.loadError}
       </p>
     )
   }
 
-  const s = state.status === 'ready' ? state.summary : null
-  const cards = [
-    { label: 'Books', icon: BookOpen, value: s && formatNumber(s.books_count) },
-    { label: 'Finished', icon: BookCheck, value: s && formatNumber(s.finished_count) },
-    { label: 'Total reading time', icon: Clock, value: s && formatDuration(s.total_read_seconds) },
-    { label: 'Pages read', icon: FileText, value: s && formatNumber(s.total_pages_read) },
+  const s = state.status === 'ready' ? state.data : null
+  const tiles = [
+    { label: t.books, icon: BookOpen, value: s && format.number(s.books_count) },
+    { label: t.finished, icon: BookCheck, value: s && format.number(s.finished_count) },
+    { label: t.totalTime, icon: Clock, value: s && format.duration(s.total_read_seconds) },
+    { label: t.pagesRead, icon: FileText, value: s && format.number(s.total_pages_read) },
   ]
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-        {cards.map(({ label, icon: Icon, value }) => (
-          <Card key={label}>
-            <CardHeader>
-              <CardDescription className="flex items-center gap-2">
-                <Icon className="size-4" aria-hidden />
-                {label}
-              </CardDescription>
-              {value === null ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <CardTitle className="text-xl font-semibold tabular-nums sm:text-2xl">
-                  {value}
-                </CardTitle>
-              )}
-            </CardHeader>
-          </Card>
+      <div className={STAT_GRID}>
+        {tiles.map((tile) => (
+          <StatTile key={tile.label} {...tile} />
         ))}
       </div>
       {s && s.books_count === 0 && (
         <Card>
           <CardContent className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              No reading data yet. Install the KOReader plugin and link your e-reader.
-            </p>
-            <Link href="/link" className={buttonVariants({ variant: 'outline' })}>
-              Link a device
+            <p className="text-sm text-muted-foreground">{t.empty}</p>
+            <Link href={href('/link')} className={buttonVariants({ variant: 'outline' })}>
+              {t.linkDevice}
             </Link>
           </CardContent>
         </Card>

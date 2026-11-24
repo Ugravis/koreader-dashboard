@@ -2,8 +2,8 @@
 
 import { LoaderCircle, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useI18n } from '@/i18n/provider'
 import { api, type Device } from '@/lib/api'
-import { formatRelative } from '@/lib/format'
 import { useLiveEvent, useLiveVersion } from '@/lib/live-events'
 
 /** Same as the API: a sync silent for this long was cut short (device asleep, Wi-Fi lost). */
@@ -11,16 +11,9 @@ const SYNC_STALE_MS = 2 * 60_000
 /** Refreshes "Synced 5 min ago". */
 const TICK_MS = 30_000
 
-const STEP_LABEL: Record<NonNullable<Device['sync_step']>, string> = {
-  stats: 'reading stats',
-  library: 'library',
-  covers: 'covers',
-}
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
-
 /** Live sync state of the user's devices, updated by the API's `sync` events. */
 export function SyncStatus() {
+  const { t, format } = useI18n()
   const [devices, setDevices] = useState<Device[] | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const devicesVersion = useLiveVersion(['devices'])
@@ -84,10 +77,10 @@ export function SyncStatus() {
         <>
           <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden />
           <span className="truncate">
-            Syncing<span className="hidden sm:inline"> {syncing.name}</span>
-            {syncing.sync_step ? `: ${STEP_LABEL[syncing.sync_step]}` : ''}
+            {t.sync.syncing} {syncing.name}
+            {syncing.sync_step ? ` · ${t.sync.steps[syncing.sync_step]}` : ''}
             {syncing.sync_step === 'covers' && syncing.covers_pending
-              ? ` (${syncing.covers_pending} left)`
+              ? ` ${t.sync.left(syncing.covers_pending)}`
               : ''}
           </span>
         </>
@@ -95,8 +88,8 @@ export function SyncStatus() {
         <>
           <RefreshCw className="size-3.5 shrink-0" aria-hidden />
           <span className="truncate">
-            {last ? `Synced ${formatRelative(last, now)}` : 'Never synced'}
-            {pending > 0 ? ` · ${plural(pending, 'cover')} to send` : ''}
+            {last ? t.sync.synced(format.relative(last, now)) : t.sync.never}
+            {pending > 0 ? ` · ${t.sync.coversToSend(pending)}` : ''}
           </span>
         </>
       )}
