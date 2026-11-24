@@ -82,7 +82,7 @@ export function DeviceList() {
       <Card>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            No linked e-reader yet. Follow the steps below to link one.
+            No linked e-reader yet. Follow the steps below, then enter the code with Link a device.
           </p>
         </CardContent>
       </Card>
