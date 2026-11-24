@@ -12,6 +12,7 @@ import {
 import { errorBody, HttpError } from '../lib/errors.ts'
 import { errorResponse } from '../lib/openapi.ts'
 import { rateLimit } from '../lib/rate-limit.ts'
+import { requireDevice } from '../middleware/device.ts'
 import { requireSession } from '../middleware/session.ts'
 import type { AppEnv } from '../types.ts'
 
@@ -34,6 +35,7 @@ const PairStartResponse = z
   .object({
     device_code: z.string(),
     user_code: z.string(),
+    web_url: z.url(),
     verification_url: z.url(),
     verification_url_complete: z.url(),
     expires_in: z.number().int(),
@@ -120,6 +122,32 @@ const revokeDevice = createRoute({
   },
 })
 
+const CurrentDeviceSchema = z
+  .object({ id: z.uuid(), name: z.string(), model: z.string().nullable(), web_url: z.url() })
+  .openapi('CurrentDevice')
+
+const getCurrent = createRoute({
+  method: 'get',
+  path: '/current',
+  tags: ['devices'],
+  middleware: [requireDevice] as const,
+  responses: {
+    200: json(CurrentDeviceSchema, 'The calling device, when still linked'),
+    401: errorResponse('Missing or revoked device token'),
+  },
+})
+
+const unlinkCurrent = createRoute({
+  method: 'delete',
+  path: '/current',
+  tags: ['devices'],
+  middleware: [requireDevice] as const,
+  responses: {
+    204: { description: 'The calling device is revoked (unlink from the plugin)' },
+    401: errorResponse('Missing or revoked device token'),
+  },
+})
+
 // --- Handlers
 
 const { devicePairings, devices } = schema
@@ -150,6 +178,7 @@ export const deviceRoutes = new OpenAPIHono<AppEnv>()
           {
             device_code: deviceCode,
             user_code: userCode,
+            web_url: env.WEB_ORIGIN,
             verification_url: verificationUrl,
             verification_url_complete: `${verificationUrl}?code=${userCode}`,
             expires_in: PAIRING_TTL_SECONDS,
@@ -218,6 +247,21 @@ export const deviceRoutes = new OpenAPIHono<AppEnv>()
     })
     if (!created) return c.json(errorBody('expired', 'Pairing already completed'), 410)
     return c.json({ device_token: deviceToken }, 200)
+  })
+  .openapi(getCurrent, async (c) => {
+    const [device] = await db
+      .select({ id: devices.id, name: devices.name, model: devices.model })
+      .from(devices)
+      .where(eq(devices.id, c.get('device').id))
+    if (!device) throw new HttpError(401, 'invalid_token', 'Device token revoked or unknown')
+    return c.json({ ...device, web_url: env.WEB_ORIGIN }, 200)
+  })
+  .openapi(unlinkCurrent, async (c) => {
+    await db
+      .update(devices)
+      .set({ revokedAt: new Date() })
+      .where(eq(devices.id, c.get('device').id))
+    return c.body(null, 204)
   })
   .openapi(listDevices, async (c) => {
     const rows = await db
