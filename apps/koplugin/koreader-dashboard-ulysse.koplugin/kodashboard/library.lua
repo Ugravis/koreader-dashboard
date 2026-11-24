@@ -207,6 +207,20 @@ function Library.bookFromFile(path)
     }
 end
 
+--- md5 the book is sent with: the sidecar's (as bookFromSidecar), else the file's.
+function Library.md5Of(path)
+    local sidecar = DocSettings:findSidecarFile(path)
+    if sidecar then
+        local ok, data = pcall(dofile, sidecar)
+        local md5 = ok and type(data) == "table" and str(data.partial_md5_checksum)
+        if md5 then
+            return md5
+        end
+    end
+    local ok, md5 = pcall(util.partialMD5, path)
+    return ok and md5 or nil
+end
+
 --- Books changed since the last send: { { path, mtime, book } }.
 --- `sent[path]` is the sidecar mtime, or "new:<file mtime>" for a book never opened.
 function Library.collectChanged(sent)

@@ -23,6 +23,9 @@ local DEFAULTS = {
     web_url = nil,
     -- Sidecar modification time last sent, per book path.
     library_sent = nil,
+    -- File version whose cover was handled (sent, or none in the file), per path:
+    -- "<file mtime>:new" or "<file mtime>:opened".
+    covers_uploaded = nil,
     -- One-time onboarding panel at startup.
     onboarding_shown = false,
 }
@@ -61,7 +64,15 @@ end
 
 --- Clears the device token and sync state (unlink or revoked token).
 function Settings:clearLink()
-    for _, key in ipairs({ "device_token", "cursor", "last_sync_time", "last_sync_rows", "library_sent" }) do
+    local keys = {
+        "device_token",
+        "cursor",
+        "last_sync_time",
+        "last_sync_rows",
+        "library_sent",
+        "covers_uploaded",
+    }
+    for _, key in ipairs(keys) do
         self.data:delSetting(key)
     end
     self.data:flush()
