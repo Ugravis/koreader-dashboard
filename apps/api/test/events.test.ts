@@ -35,24 +35,25 @@ describe('live events', () => {
     const res = await request('/v1/me/events', { headers: { cookie } })
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toContain('text/event-stream')
-    const events = readEvents(res, 3)
-
     const device = (t: string) => ({ authorization: `Bearer ${t}` })
-    await request('/v1/devices/current/sync', {
-      method: 'PUT',
-      body: { state: 'running', step: 'library' },
-      headers: device(otherToken),
+    // Sent once subscribed (`ready`), or they could be published before the stream listens.
+    const events = await readEvents(res, 3, async () => {
+      await request('/v1/devices/current/sync', {
+        method: 'PUT',
+        body: { state: 'running', step: 'library' },
+        headers: device(otherToken),
+      })
+      await request('/v1/devices/current/sync', {
+        method: 'PUT',
+        body: { state: 'running', step: 'library' },
+        headers: device(token),
+      })
+      await request('/v1/library', {
+        body: { books: [{ md5: 'aaa', title: 'Dune', file_path: '/b/dune.epub' }] },
+        headers: device(token),
+      })
     })
-    await request('/v1/devices/current/sync', {
-      method: 'PUT',
-      body: { state: 'running', step: 'library' },
-      headers: device(token),
-    })
-    await request('/v1/library', {
-      body: { books: [{ md5: 'aaa', title: 'Dune', file_path: '/b/dune.epub' }] },
-      headers: device(token),
-    })
-    expect(await events).toEqual(['ready', 'sync', 'data'])
+    expect(events).toEqual(['ready', 'sync', 'data'])
   })
 
   it('ends the streams when Postgres drops the listener, then listens again', async () => {
