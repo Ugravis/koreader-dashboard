@@ -1,5 +1,6 @@
 import {
   bigint,
+  customType,
   date,
   index,
   integer,
@@ -106,4 +107,25 @@ export const annotations = pgTable(
     pos1: text(),
   },
   (t) => [index('annotations_book_id_idx').on(t.bookId)],
+)
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' })
+
+// Cover image extracted from the book file by the plugin, resized by the API (JPEG).
+// Keyed by file (md5 + path), not by book row: it survives the row being re-created, and two
+// files sharing a md5 (a sidecar copied from another book) keep their own cover.
+export const bookCovers = pgTable(
+  'book_covers',
+  {
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    md5: text().notNull(),
+    filePath: text().notNull(),
+    image: bytea().notNull(),
+    width: integer().notNull(),
+    height: integer().notNull(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.md5, t.filePath] })],
 )

@@ -113,4 +113,30 @@ describe('device pairing', () => {
     }
     expect(list.devices).toHaveLength(0)
   })
+
+  it('stores the sync progress reported by the device', async () => {
+    const { cookie } = await signUp()
+    const token = await pairDevice(cookie)
+    const report = (json: unknown) =>
+      request('/v1/devices/current/sync', {
+        method: 'PUT',
+        body: json,
+        headers: { authorization: `Bearer ${token}` },
+      })
+    const sync = async () =>
+      (
+        (await (await request('/v1/devices', { headers: { cookie } })).json()) as {
+          devices: { syncing: boolean; sync_step: string | null; covers_pending: number | null }[]
+        }
+      ).devices[0]
+
+    expect(await sync()).toMatchObject({ syncing: false, sync_step: null, covers_pending: null })
+    expect((await report({ state: 'running', step: 'covers', covers_pending: 12 })).status).toBe(
+      204,
+    )
+    expect(await sync()).toMatchObject({ syncing: true, sync_step: 'covers', covers_pending: 12 })
+    await report({ state: 'idle', covers_pending: 2 })
+    expect(await sync()).toMatchObject({ syncing: false, sync_step: null, covers_pending: 2 })
+    expect((await report({ state: 'paused' })).status).toBe(400)
+  })
 })

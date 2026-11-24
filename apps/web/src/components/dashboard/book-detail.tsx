@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useLiveVersion } from '@/lib/live-events'
 import { api, ApiError, type Annotation, type Book } from '@/lib/api'
 import { cleanMeta } from '@/lib/covers'
 import { formatDate, formatDuration, formatNumber } from '@/lib/format'
@@ -32,6 +33,8 @@ const plainText = (html: string) =>
 
 export function BookDetail({ id }: { id: string }) {
   const [state, setState] = useState<State>({ status: 'loading' })
+  // Refetch when a device sends data; the current data stays on screen meanwhile.
+  const liveVersion = useLiveVersion()
 
   useEffect(() => {
     let active = true
@@ -45,7 +48,7 @@ export function BookDetail({ id }: { id: string }) {
     return () => {
       active = false
     }
-  }, [id])
+  }, [id, liveVersion])
 
   if (state.status === 'loading') return <BookDetailSkeleton />
   if (state.status === 'error') {
@@ -77,10 +80,12 @@ export function BookDetail({ id }: { id: string }) {
       <BackLink />
       <div className="flex gap-4">
         <BookCover
+          key={book.cover_url ?? 'none'}
           md5={book.md5}
           title={book.title}
           authors={book.authors}
           isbn={book.isbn}
+          coverUrl={book.cover_url}
           className="w-24 sm:w-32"
         />
         <div className="flex min-w-0 flex-col gap-1.5">

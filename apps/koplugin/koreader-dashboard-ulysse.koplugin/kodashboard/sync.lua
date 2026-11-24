@@ -6,14 +6,23 @@ plugin instances.
 ]]
 
 local NetworkMgr = require("ui/network/manager")
+local UIManager = require("ui/uimanager")
 local logger = require("logger")
 local socketutil = require("socketutil")
+local Covers = require("kodashboard/covers")
+local DocSettings = require("docsettings")
 local Library = require("kodashboard/library")
+local lfs = require("libs/libkoreader-lfs")
 local Stats = require("kodashboard/stats")
 
-local THROTTLE_SECONDS = 5 * 60
+-- Only against triggers firing together (resume, then Wi-Fi back).
+local THROTTLE_SECONDS = 30
 -- Upper bound on batches per run, so a large backlog cannot freeze the UI for long.
 local MAX_BATCHES = 20
+-- Covers read and sent per run (each one opens the book file and uploads it).
+local MAX_COVERS = 10
+-- Pause between two cover batches when covers are left, so the UI stays usable.
+local COVERS_PAUSE_SECONDS = 10
 
 local Sync = {
     last_attempt = 0,
@@ -41,6 +50,8 @@ function Sync:run()
     end
     self.running = true
     self.last_attempt = os.time()
+    self:report("running", "stats")
+    local covers_pending
 
     local rows, batches, res = 0, 0, nil
     while batches < MAX_BATCHES do
@@ -80,8 +91,12 @@ function Sync:run()
     res = res or { ok = true, rows = rows }
 
     if res.ok then
+        self:report("running", "library")
         local lib = self:syncLibrary()
         res.books = lib.books
+        if lib.ok then
+            covers_pending = self:syncCovers()
+        end
         if not lib.ok then
             res = { ok = false, rows = rows, err = lib.err }
         elseif rows == 0 and lib.books == 0 then
@@ -96,8 +111,32 @@ function Sync:run()
     else
         logger.warn("KOReaderDashboard: sync failed", res.err)
     end
+    if self.settings:isLinked() then
+        self:report("idle", nil, covers_pending)
+    end
     self.running = false
+    self:scheduleCovers(covers_pending)
     return res
+end
+
+--- Sends the covers left in further batches, while each batch makes progress (a book
+--- unknown to the server never does) and Wi-Fi stays up.
+function Sync:scheduleCovers(left)
+    if not left or left == 0 then
+        return
+    end
+    UIManager:scheduleIn(COVERS_PAUSE_SECONDS, function()
+        if self.running or not self.settings:isLinked() or not self.isConnected() then
+            return
+        end
+        self.running = true
+        local now_left = self:syncCovers()
+        self:report("idle", nil, now_left)
+        self.running = false
+        if now_left < left then
+            self:scheduleCovers(now_left)
+        end
+    end)
 end
 
 --- Sends sidecars changed since the last successful send.
@@ -128,6 +167,82 @@ function Sync:syncLibrary()
         books = books + #batch
     end
     return { ok = true, books = books }
+end
+
+local function urlEncode(text)
+    return (text:gsub("[^%w%-%._~/]", function(c)
+        return string.format("%%%02X", c:byte())
+    end))
+end
+
+--- Live progress for the website. Best effort: the result is ignored.
+--- @param state string "running" or "idle"
+--- @param step string|nil "stats", "library" or "covers" while running
+--- @param covers_pending number|nil covers left to send
+function Sync:report(state, step, covers_pending)
+    self.api:request("PUT", "/v1/devices/current/sync", {
+        state = state,
+        step = step,
+        covers_pending = covers_pending,
+    }, {
+        auth = true,
+        timeout = { socketutil.DEFAULT_BLOCK_TIMEOUT, socketutil.DEFAULT_TOTAL_TIMEOUT },
+    })
+end
+
+--- Books whose cover is not handled yet: { { path, marker } }.
+local function pendingCovers(sent)
+    local pending = {}
+    for _, path in ipairs(Library.listFiles()) do
+        local mtime = lfs.attributes(path, "modification")
+        -- Opening a book creates its sidecar, whose md5 may differ from the file's: resend then.
+        local marker = mtime and (mtime .. (DocSettings:findSidecarFile(path) and ":opened" or ":new"))
+        if marker and sent[path] ~= marker then
+            table.insert(pending, { path = path, marker = marker })
+        end
+    end
+    return pending
+end
+
+--- Sends the covers of books not handled yet, once per file version, and again once opened.
+--- Best effort: a failure never fails the sync, the cover is retried on the next run.
+--- @return number covers left for the next runs
+function Sync:syncCovers()
+    local sent = self.settings:get("covers_uploaded") or {}
+    local pending = pendingCovers(sent)
+    local left = #pending
+    self:report("running", "covers", left)
+    for i, item in ipairs(pending) do
+        if i > MAX_COVERS then
+            break
+        end
+        local done = true
+        local image = Covers.of(item.path)
+        local md5 = image and Library.md5Of(item.path)
+        if md5 then
+            local url = "/v1/library/covers/" .. md5 .. "?path=" .. urlEncode(item.path)
+            local status = self.api:request("PUT", url, nil, {
+                auth = true,
+                raw = image,
+                timeout = { socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT },
+            })
+            if status == nil then
+                break -- Network down: stop, retry next run.
+            end
+            -- 404: book not on the server yet. Other errors (bad or too large image) are
+            -- final for this file version.
+            done = status ~= 404 and status ~= 401 and status < 500
+        end
+        if done then
+            sent[item.path] = item.marker
+            self.settings:set("covers_uploaded", sent)
+            left = left - 1
+            if image then
+                self:report("running", "covers", left)
+            end
+        end
+    end
+    return left
 end
 
 --- Device status check. A 401 unlinks the device (handled by Api).

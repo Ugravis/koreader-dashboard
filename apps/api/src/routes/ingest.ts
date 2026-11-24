@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
 import { schema, sql } from '@koreader-dashboard/db'
 import { db } from '../db.ts'
+import { publish } from '../lib/events.ts'
 import { HttpError } from '../lib/errors.ts'
 import { errorResponse } from '../lib/openapi.ts'
 import { requireDevice } from '../middleware/device.ts'
@@ -150,5 +151,6 @@ export const ingestRoutes = new OpenAPIHono<AppEnv>().openapi(ingest, async (c) 
     }
   })
 
+  await publish(userId, { type: 'data' })
   return c.json(result, 200)
 })

@@ -15,6 +15,20 @@
       "when": 1795520526970,
       "tag": "0001_library",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795525802650,
+      "tag": "0002_covers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795525901527,
+      "tag": "0003_sync_status",
+      "breakpoints": true
     }
   ]
 }

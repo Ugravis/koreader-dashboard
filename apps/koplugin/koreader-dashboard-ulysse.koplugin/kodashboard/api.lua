@@ -39,7 +39,8 @@ end
 --- @param method string
 --- @param path string e.g. "/v1/ingest"
 --- @param payload table|nil JSON body
---- @param opts table|nil { auth = true, timeout = { block, total }, ignore_401 = true }
+--- @param opts table|nil { auth = true, timeout = { block, total }, ignore_401 = true,
+---   raw = string body sent as is, content_type = its type }
 function Api:request(method, path, payload, opts)
     opts = opts or {}
     local base = self:baseUrl()
@@ -47,10 +48,11 @@ function Api:request(method, path, payload, opts)
         return nil, "server_url not set"
     end
     local url = base .. path
-    local body = payload and JSON.encode(payload)
+    local body = opts.raw or (payload and JSON.encode(payload))
     local headers = { ["Accept"] = "application/json" }
     if body then
-        headers["Content-Type"] = "application/json"
+        headers["Content-Type"] = opts.raw and (opts.content_type or "application/octet-stream")
+            or "application/json"
         headers["Content-Length"] = tostring(#body)
     end
     if opts.auth then

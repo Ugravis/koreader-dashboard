@@ -6,8 +6,10 @@ import { Suspense, useEffect, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
+import { LiveEventsProvider } from '@/lib/live-events'
 import { useSession } from '@/lib/use-session'
 import { cn } from '@/lib/utils'
+import { SyncStatus } from './sync-status'
 
 const NAV = [
   { href: '/dashboard', label: 'Overview' },
@@ -29,31 +31,36 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <Suspense>
-        <RedirectWhenAnonymous anonymous={session.status === 'anonymous'} />
-      </Suspense>
-      <header className="border-b">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-2 px-4 py-3">
-          <Link href="/dashboard" className="font-semibold tracking-tight">
-            KOReader Dashboard
-          </Link>
-          {session.status === 'authenticated' ? (
-            <Button variant="ghost" size="sm" onClick={signOut}>
-              Sign out
-            </Button>
-          ) : (
-            <Skeleton className="h-7 w-16" />
-          )}
-        </div>
-        <Suspense fallback={<Nav pathname={null} />}>
-          <CurrentNav />
+    <LiveEventsProvider>
+      <div className="flex flex-1 flex-col">
+        <Suspense>
+          <RedirectWhenAnonymous anonymous={session.status === 'anonymous'} />
         </Suspense>
-      </header>
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-6">
-        {children}
-      </main>
-    </div>
+        <header className="border-b">
+          <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-2 px-4 py-3">
+            <Link href="/dashboard" className="font-semibold tracking-tight">
+              KOReader Dashboard
+            </Link>
+            {session.status === 'authenticated' ? (
+              <Button variant="ghost" size="sm" onClick={signOut}>
+                Sign out
+              </Button>
+            ) : (
+              <Skeleton className="h-7 w-16" />
+            )}
+          </div>
+          <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 pb-2">
+            <Suspense fallback={<Nav pathname={null} />}>
+              <CurrentNav />
+            </Suspense>
+            {session.status === 'authenticated' && <SyncStatus />}
+          </div>
+        </header>
+        <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-6">
+          {children}
+        </main>
+      </div>
+    </LiveEventsProvider>
   )
 }
 
@@ -76,7 +83,7 @@ function Nav({ pathname }: { pathname: string | null }) {
       ? pathname === '/dashboard' || pathname?.startsWith('/dashboard/books/')
       : pathname === href
   return (
-    <nav className="mx-auto flex w-full max-w-4xl gap-1 px-4 pb-2" aria-label="Dashboard">
+    <nav className="flex shrink-0 gap-1" aria-label="Dashboard">
       {NAV.map((item) => (
         <Link
           key={item.href}

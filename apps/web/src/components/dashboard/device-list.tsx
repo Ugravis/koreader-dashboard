@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useLiveVersion } from '@/lib/live-events'
 import { api, ApiError, type Device } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 
@@ -25,6 +26,8 @@ export function DeviceList() {
   const [target, setTarget] = useState<Device | null>(null)
   const [revoking, setRevoking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Linked, revoked or synced elsewhere: refetch.
+  const liveVersion = useLiveVersion(['devices', 'sync'])
 
   useEffect(() => {
     let active = true
@@ -39,7 +42,7 @@ export function DeviceList() {
     return () => {
       active = false
     }
-  }, [])
+  }, [liveVersion])
 
   async function revoke(id: string) {
     setRevoking(true)

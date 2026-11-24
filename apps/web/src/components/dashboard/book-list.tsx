@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useLiveVersion } from '@/lib/live-events'
 import { api, ApiError, type Book } from '@/lib/api'
 import { cleanMeta } from '@/lib/covers'
 import { formatDuration } from '@/lib/format'
@@ -14,6 +15,8 @@ type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; bo
 
 export function BookList() {
   const [state, setState] = useState<State>({ status: 'loading' })
+  // Refetch when a device sends data; the current data stays on screen meanwhile.
+  const liveVersion = useLiveVersion()
 
   useEffect(() => {
     let active = true
@@ -27,7 +30,7 @@ export function BookList() {
     return () => {
       active = false
     }
-  }, [])
+  }, [liveVersion])
 
   if (state.status === 'ready' && state.books.length === 0) return null
 
@@ -71,7 +74,14 @@ function BookRow({ book }: { book: Book }) {
         href={`/dashboard/books/${book.id}`}
         className="-mx-2 flex gap-3 rounded-lg p-2 outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        <BookCover md5={book.md5} title={book.title} authors={book.authors} isbn={book.isbn} />
+        <BookCover
+          key={book.cover_url ?? 'none'}
+          md5={book.md5}
+          title={book.title}
+          authors={book.authors}
+          isbn={book.isbn}
+          coverUrl={book.cover_url}
+        />
         <div className="flex min-w-0 flex-1 flex-col gap-1 py-0.5">
           <div className="flex items-start justify-between gap-2">
             <p className="truncate font-medium">{book.title}</p>
