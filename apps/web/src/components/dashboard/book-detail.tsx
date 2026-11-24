@@ -7,8 +7,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useI18n } from '@/i18n/provider'
 import { api, type Annotation } from '@/lib/api'
 import { cleanMeta } from '@/lib/covers'
+import { authorsOf } from '@/lib/reading'
 import { useLiveQuery } from '@/lib/use-live-query'
+import { authorHref } from './authors-view'
 import { BookCover } from './book-cover'
+import { BookStats } from './book-stats'
 import { BookStatusBadge, ProgressBar } from './book-status'
 
 /** KOReader descriptions often contain HTML: keep the text only. */
@@ -26,7 +29,7 @@ const plainText = (html: string) =>
     .trim()
 
 export function BookDetail({ id }: { id: string }) {
-  const { t: i18n, format } = useI18n()
+  const { t: i18n, format, href } = useI18n()
   const t = i18n.book
   const state = useLiveQuery(() => api.getBook(id), [id])
 
@@ -43,7 +46,7 @@ export function BookDetail({ id }: { id: string }) {
   }
 
   const { book, annotations } = state.data
-  const authors = cleanMeta(book.authors)?.split('\n').join(', ')
+  const authors = authorsOf(book)
   const series = cleanMeta(book.series)
   const description = book.description ? plainText(book.description) : null
   const stats = [
@@ -68,7 +71,21 @@ export function BookDetail({ id }: { id: string }) {
         />
         <div className="flex min-w-0 flex-col gap-1.5">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{book.title}</h1>
-          {authors && <p className="text-muted-foreground">{authors}</p>}
+          {authors.length > 0 && (
+            <p className="text-muted-foreground">
+              {authors.map((a, i) => (
+                <span key={a}>
+                  {i > 0 && ', '}
+                  <Link
+                    href={href(authorHref(a))}
+                    className="hover:text-foreground hover:underline"
+                  >
+                    {a}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
           {series && <p className="text-sm text-muted-foreground">{series}</p>}
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <BookStatusBadge status={book.status} />
@@ -79,6 +96,18 @@ export function BookDetail({ id }: { id: string }) {
               </span>
             ) : null}
           </div>
+          {book.keywords.length > 0 && (
+            <ul className="mt-1 flex flex-wrap gap-1" aria-label={t.genres}>
+              {book.keywords.slice(0, 6).map((k) => (
+                <li
+                  key={k}
+                  className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
+                >
+                  {k}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
@@ -95,6 +124,8 @@ export function BookDetail({ id }: { id: string }) {
           </dl>
         </CardContent>
       </Card>
+
+      <BookStats book={book} annotations={annotations} />
 
       {book.review && (
         <Card>

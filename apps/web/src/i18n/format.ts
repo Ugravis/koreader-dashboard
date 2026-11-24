@@ -7,6 +7,13 @@ export function createFormatters(locale: Locale) {
   const number = new Intl.NumberFormat(locale)
   const dateTime = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
   const date = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' })
+  const longDate = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+  const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 })
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' })
 
   return {
@@ -22,6 +29,10 @@ export function createFormatters(locale: Locale) {
     dateTime: (iso: string | null) => (iso ? dateTime.format(new Date(iso)) : t.common.never),
     /** `YYYY-MM-DD` (a calendar day, no time zone) -> "24 Nov 2026". */
     day: (day: string) => date.format(new Date(`${day}T12:00:00`)),
+    /** `YYYY-MM-DD` -> "Tuesday, 24 November 2026". */
+    longDay: (day: string) => longDate.format(new Date(`${day}T12:00:00`)),
+    /** 0.42 -> "42%" ("42 %" in French). */
+    percent: (ratio: number) => percent.format(ratio),
     /** "just now", "5 min ago", "3 hours ago", "2 days ago". */
     relative(iso: string, now = Date.now()) {
       const seconds = Math.round((new Date(iso).getTime() - now) / 1000)

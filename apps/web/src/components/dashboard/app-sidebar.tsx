@@ -3,11 +3,15 @@
 import { Dialog } from '@base-ui/react/dialog'
 import {
   BarChart3,
+  CalendarDays,
+  Highlighter,
   House,
   Library,
   LogOut,
   Menu,
+  PenLine,
   Settings,
+  Sparkles,
   Users,
   X,
   type LucideIcon,
@@ -26,13 +30,26 @@ import { cn } from '@/lib/utils'
 import { SyncStatus } from './sync-status'
 import { ThemeToggle } from './theme-toggle'
 
-type NavKey = 'overview' | 'books' | 'stats' | 'community' | 'settings'
+type NavKey =
+  | 'overview'
+  | 'books'
+  | 'authors'
+  | 'highlights'
+  | 'stats'
+  | 'calendar'
+  | 'review'
+  | 'community'
+  | 'settings'
 type NavItem = { key: NavKey; path: string; icon: LucideIcon }
 
 const MAIN: NavItem[] = [
   { key: 'overview', path: '/dashboard', icon: House },
   { key: 'books', path: '/dashboard/books', icon: Library },
+  { key: 'authors', path: '/dashboard/authors', icon: PenLine },
+  { key: 'highlights', path: '/dashboard/highlights', icon: Highlighter },
   { key: 'stats', path: '/dashboard/stats', icon: BarChart3 },
+  { key: 'calendar', path: '/dashboard/calendar', icon: CalendarDays },
+  { key: 'review', path: '/dashboard/review', icon: Sparkles },
   { key: 'community', path: '/dashboard/community', icon: Users },
 ]
 const SETTINGS: NavItem = { key: 'settings', path: '/dashboard/settings', icon: Settings }

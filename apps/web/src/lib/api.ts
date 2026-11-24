@@ -55,6 +55,9 @@ export type Book = {
   series_index: number | null
   language: string | null
   isbn: string | null
+  /** Genres and tags from the book metadata. */
+  keywords: string[]
+  pages: number | null
   /** API path of the cover sent by the device, null when none. */
   cover_url: string | null
   description: string | null
@@ -100,11 +103,51 @@ export type ReadingStats = {
   by_hour: number[]
   /** Seconds per weekday, Monday first. */
   by_weekday: number[]
+  /** Seconds per weekday (Monday first) and hour (0-23). */
+  by_weekday_hour: number[][]
+  /** Every month with reading, oldest first. */
+  by_month: { month: string; seconds: number; pages: number }[]
+  sessions: SessionSummary
+  records: {
+    best_day: { date: string; seconds: number } | null
+    best_month: { month: string; seconds: number } | null
+    fastest_book: { id: string; title: string; days: number } | null
+  }
   reading_days: number
   current_streak: number
   longest_streak: number
   first_read_on: string | null
 }
+
+export type SessionSummary = {
+  count: number
+  average_seconds: number
+  longest_seconds: number
+  longest_on: string | null
+}
+export type ActivityDay = DayStat & {
+  /** Books read that day (ids as in listBooks), most read first. */
+  books: { id: string; seconds: number }[]
+}
+export type BookStats = {
+  timezone: string
+  /** Reading days, oldest first; `progress` is the furthest point reached (0-1). */
+  days: (DayStat & { progress: number })[]
+  by_hour: number[]
+  sessions: SessionSummary
+  /** Latest sessions, newest first. */
+  recent_sessions: { start: string; seconds: number; pages: number }[]
+  first_read_at: string | null
+  last_read_at: string | null
+  pages_per_hour: number | null
+  last_14_days_seconds: number
+}
+export type AnnotationEntry = Annotation & {
+  book_id: string
+  book_title: string
+  book_authors: string | null
+}
+export type Goals = { yearly_books: number | null; daily_minutes: number | null }
 
 /** Browser time zone, so days and hours match the reader's clock. */
 const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -124,6 +167,16 @@ export const api = {
     apiFetch<{ book: Book; annotations: Annotation[] }>(`/v1/me/books/${id}`),
   getStats: (days = 30) =>
     apiFetch<ReadingStats>(`/v1/me/stats?days=${days}&tz=${encodeURIComponent(timeZone())}`),
+  /** Days with reading between two `YYYY-MM-DD` days (inclusive, at most 400 days apart). */
+  getActivity: (from: string, to: string) =>
+    apiFetch<{ days: ActivityDay[] }>(
+      `/v1/me/activity?from=${from}&to=${to}&tz=${encodeURIComponent(timeZone())}`,
+    ),
+  getBookStats: (id: string) =>
+    apiFetch<BookStats>(`/v1/me/books/${id}/stats?tz=${encodeURIComponent(timeZone())}`),
+  listAnnotations: () => apiFetch<{ annotations: AnnotationEntry[] }>('/v1/me/annotations'),
+  getGoals: () => apiFetch<Goals>('/v1/me/goals'),
+  saveGoals: (goals: Goals) => apiFetch<Goals>('/v1/me/goals', { method: 'PUT', json: goals }),
   listDevices: () => apiFetch<{ devices: Device[] }>('/v1/devices'),
   revokeDevice: (id: string) => apiFetch<void>(`/v1/devices/${id}`, { method: 'DELETE' }),
 }

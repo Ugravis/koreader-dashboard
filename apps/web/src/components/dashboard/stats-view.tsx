@@ -2,20 +2,25 @@
 
 import { CalendarCheck, CalendarDays, Clock, Flame, Timer, Trophy } from 'lucide-react'
 import Link from 'next/link'
+import { HabitGrid } from '@/components/charts/habit-grid'
+import { RankList } from '@/components/charts/rank-list'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useI18n } from '@/i18n/provider'
 import { api, type Book, type DayStat, type ReadingStats } from '@/lib/api'
-import { cleanMeta } from '@/lib/covers'
+import { authorLine } from '@/lib/reading'
 import { useLiveQuery } from '@/lib/use-live-query'
 import { BarChart } from './bar-chart'
+import { GenreStats, SagaStats } from './library-insights'
+import { MonthComparison, SessionsAndRecords, SpeedChart, YearHeatmap } from './stats-sections'
 import { STAT_GRID, StatTile } from './stat-tile'
 
 const sum = (days: DayStat[]) => days.reduce((n, d) => n + d.seconds, 0)
 
 export function StatsView() {
   const { t } = useI18n()
-  const stats = useLiveQuery(() => api.getStats(30), [])
+  // Two months: the last 30 days, and this month against the last one.
+  const stats = useLiveQuery(() => api.getStats(62), [])
   const books = useLiveQuery(() => api.listBooks(), [])
 
   if (stats.status === 'error') {
@@ -26,6 +31,8 @@ export function StatsView() {
     )
   }
   const s = stats.status === 'ready' ? stats.data : null
+  const last30 = s && { ...s, days: s.days.slice(-30) }
+  const bookList = books.status === 'ready' ? books.data.books : null
   if (s && s.reading_days === 0) {
     return (
       <Card>
@@ -38,12 +45,14 @@ export function StatsView() {
 
   return (
     <div className="flex flex-col gap-6">
-      <KeyFigures stats={s} />
+      <KeyFigures stats={last30} />
+      <YearHeatmap firstYear={s?.first_read_on ? Number(s.first_read_on.slice(0, 4)) : null} />
+      <MonthComparison stats={s} />
       <Card>
         <CardHeader>
           <CardTitle>{t.stats.last30Days}</CardTitle>
         </CardHeader>
-        <CardContent>{s ? <DailyChart days={s.days} /> : <ChartSkeleton />}</CardContent>
+        <CardContent>{last30 ? <DailyChart days={last30.days} /> : <ChartSkeleton />}</CardContent>
       </Card>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -59,7 +68,19 @@ export function StatsView() {
           <CardContent>{s ? <WeekdayChart days={s.by_weekday} /> : <ChartSkeleton />}</CardContent>
         </Card>
       </div>
-      <TopBooks books={books.status === 'ready' ? books.data.books : null} />
+      <Card>
+        <CardHeader>
+          <CardTitle>{t.stats.habits}</CardTitle>
+        </CardHeader>
+        <CardContent>{s ? <HabitGrid grid={s.by_weekday_hour} /> : <ChartSkeleton />}</CardContent>
+      </Card>
+      <SessionsAndRecords stats={s} />
+      <SpeedChart stats={s} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <GenreStats books={bookList} />
+        <SagaStats books={bookList} />
+      </div>
+      <TopBooks books={bookList} />
     </div>
   )
 }
@@ -113,15 +134,25 @@ export function DailyChart({ days, tickEvery = 5 }: { days: DayStat[]; tickEvery
           key: d.date,
           value: d.seconds,
           label: short ? weekday.format(date) : String(date.getDate()),
-          tooltip: t.stats.dayTooltip(format.day(d.date), format.duration(d.seconds)),
+          tip: {
+            title: format.longDay(d.date),
+            rows: [
+              { label: t.charts.time, value: format.duration(d.seconds) },
+              { label: t.charts.pages, value: format.number(d.pages) },
+            ],
+          },
         }
       })}
     />
   )
 }
 
-function HourChart({ hours }: { hours: number[] }) {
+/** Share of `value` in `total`, for tooltips. */
+const shareOf = (value: number, total: number) => (total > 0 ? value / total : 0)
+
+export function HourChart({ hours }: { hours: number[] }) {
   const { t, format } = useI18n()
+  const total = hours.reduce((a, b) => a + b, 0)
   return (
     <BarChart
       tickEvery={6}
@@ -129,21 +160,37 @@ function HourChart({ hours }: { hours: number[] }) {
         key: String(h),
         value: seconds,
         label: `${h}h`,
-        tooltip: t.stats.dayTooltip(`${h}h–${h + 1}h`, format.duration(seconds)),
+        tip: {
+          title: `${h}h – ${h + 1}h`,
+          rows: [
+            { label: t.charts.time, value: format.duration(seconds) },
+            { label: t.charts.share, value: format.percent(shareOf(seconds, total)) },
+          ],
+        },
       }))}
     />
   )
 }
 
 function WeekdayChart({ days }: { days: number[] }) {
-  const { t, format } = useI18n()
+  const { t, format, locale } = useI18n()
+  const total = days.reduce((a, b) => a + b, 0)
+  // 2024-01-01 is a Monday.
+  const name = (i: number) =>
+    new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(new Date(2024, 0, 1 + i))
   return (
     <BarChart
       bars={days.map((seconds, i) => ({
         key: String(i),
         value: seconds,
         label: t.stats.weekdays[i] ?? '',
-        tooltip: t.stats.dayTooltip(t.stats.weekdays[i] ?? '', format.duration(seconds)),
+        tip: {
+          title: name(i),
+          rows: [
+            { label: t.charts.time, value: format.duration(seconds) },
+            { label: t.charts.share, value: format.percent(shareOf(seconds, total)) },
+          ],
+        },
       }))}
     />
   )
@@ -156,44 +203,24 @@ export function TopBooks({ books }: { books: Book[] | null }) {
     .sort((a, b) => b.total_read_seconds - a.total_read_seconds)
     .slice(0, 5)
   if (top?.length === 0) return null
-  const max = top?.[0]?.total_read_seconds ?? 1
   return (
     <Card>
       <CardHeader>
         <CardTitle>{t.stats.topBooks}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ol className="flex flex-col gap-3">
-          {top
-            ? top.map((book) => (
-                <li key={book.id}>
-                  <Link
-                    href={href(`/dashboard/books/${book.id}`)}
-                    className="flex flex-col gap-1 rounded-md outline-none hover:opacity-80 focus-visible:ring-3 focus-visible:ring-ring/50"
-                  >
-                    <span className="flex justify-between gap-3 text-sm">
-                      <span className="truncate font-medium">
-                        {book.title}
-                        <span className="font-normal text-muted-foreground">
-                          {cleanMeta(book.authors) &&
-                            ` · ${cleanMeta(book.authors)?.split('\n').join(', ')}`}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-muted-foreground tabular-nums">
-                        {format.duration(book.total_read_seconds)}
-                      </span>
-                    </span>
-                    <span className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-                      <span
-                        className="block h-full rounded-full bg-primary"
-                        style={{ width: `${(book.total_read_seconds / max) * 100}%` }}
-                      />
-                    </span>
-                  </Link>
-                </li>
-              ))
-            : [0, 1, 2].map((i) => <Skeleton key={i} className="h-8 w-full" />)}
-        </ol>
+        <RankList
+          items={
+            top?.map((book) => ({
+              key: book.id,
+              label: book.title,
+              detail: authorLine(book) || undefined,
+              value: book.total_read_seconds,
+              display: format.duration(book.total_read_seconds),
+              href: href(`/dashboard/books/${book.id}`),
+            })) ?? null
+          }
+        />
       </CardContent>
     </Card>
   )

@@ -20,7 +20,9 @@ import { themes, useTheme, type Theme } from '@/lib/theme'
 import { useSessionContext } from '@/lib/use-session'
 import { cn } from '@/lib/utils'
 import { SignOutButton } from './app-sidebar'
+import { DataExport } from './data-export'
 import { DeviceList } from './device-list'
+import { GoalsSettings } from './goals'
 
 const THEME_ICON = { light: Sun, dark: Moon, system: Monitor }
 
@@ -28,9 +30,11 @@ export function SettingsView() {
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <ProfileSection />
+      <GoalsSettings />
       <AppearanceSection />
       <LanguageSection />
       <DevicesSection />
+      <DataExport />
       <AccountSection />
     </div>
   )
