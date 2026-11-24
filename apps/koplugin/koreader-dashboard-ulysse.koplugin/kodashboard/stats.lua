@@ -40,7 +40,7 @@ local PAGE_STATS_SQL = [[
 ]]
 
 local BOOKS_SQL = [[
-    SELECT md5, title, authors, series, language, pages, notes, highlights,
+    SELECT id, md5, title, authors, series, language, pages, notes, highlights,
            last_open, total_read_time, total_read_pages
     FROM book
     WHERE id IN (%s)
@@ -72,7 +72,8 @@ function Stats.readBatch(cursor, limit)
                 table.insert(book_ids, id_book)
             end
             table.insert(page_stats, {
-                md5 = str(row[2]),
+                -- KOReader's local book id: identifies the book row within this request.
+                book_ref = tostring(id_book),
                 page = num(row[3]),
                 start_time = num(row[4]),
                 duration = num(row[5]),
@@ -103,17 +104,18 @@ function Stats.readBatch(cursor, limit)
             row = stmt:step()
             while row do
                 table.insert(books, {
-                    md5 = str(row[1]),
-                    title = str(row[2]) or "",
-                    authors = str(row[3]),
-                    series = str(row[4]),
-                    language = str(row[5]),
-                    pages = num(row[6]),
-                    notes = num(row[7]),
-                    highlights = num(row[8]),
-                    last_open = num(row[9]),
-                    total_read_time = num(row[10]),
-                    total_read_pages = num(row[11]),
+                    ref = tostring(num(row[1])),
+                    md5 = str(row[2]),
+                    title = str(row[3]) or "",
+                    authors = str(row[4]),
+                    series = str(row[5]),
+                    language = str(row[6]),
+                    pages = num(row[7]),
+                    notes = num(row[8]),
+                    highlights = num(row[9]),
+                    last_open = num(row[10]),
+                    total_read_time = num(row[11]),
+                    total_read_pages = num(row[12]),
                 })
                 row = stmt:step()
             end
