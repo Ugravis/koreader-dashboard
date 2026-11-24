@@ -1,7 +1,6 @@
 'use client'
 
 import { Tablet } from 'lucide-react'
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import {
   AlertDialog,
@@ -13,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError, type Device } from '@/lib/api'
@@ -81,11 +80,10 @@ export function DeviceList() {
   if (state.devices.length === 0) {
     return (
       <Card>
-        <CardContent className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">No linked device.</p>
-          <Link href="/link" className={buttonVariants({ variant: 'outline' })}>
-            Link a device
-          </Link>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            No linked e-reader yet. Follow the steps below to link one.
+          </p>
         </CardContent>
       </Card>
     )

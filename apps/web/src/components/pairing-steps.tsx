@@ -27,8 +27,8 @@ export function PairingSteps({ className }: { className?: string }) {
             panel). A code and a QR code appear.
           </li>
           <li>
-            Scan the QR code with your phone, or open this page and enter the code. Your reading
-            statistics sync right after.
+            Scan the QR code with your phone, or open the link shown on the e-reader, then sign in
+            and confirm the code. Your reading statistics sync right after.
           </li>
         </ol>
       </CardContent>
