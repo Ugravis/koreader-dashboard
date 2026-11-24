@@ -3,6 +3,16 @@
 import { Tablet } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,8 +23,8 @@ type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; de
 
 export function DeviceList() {
   const [state, setState] = useState<State>({ status: 'loading' })
-  const [confirming, setConfirming] = useState<string | null>(null)
-  const [revoking, setRevoking] = useState<string | null>(null)
+  const [target, setTarget] = useState<Device | null>(null)
+  const [revoking, setRevoking] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -33,7 +43,7 @@ export function DeviceList() {
   }, [])
 
   async function revoke(id: string) {
-    setRevoking(id)
+    setRevoking(true)
     setError(null)
     try {
       await api.revokeDevice(id)
@@ -45,8 +55,8 @@ export function DeviceList() {
     } catch {
       setError('Could not revoke the device. Try again.')
     } finally {
-      setRevoking(null)
-      setConfirming(null)
+      setRevoking(false)
+      setTarget(null)
     }
   }
 
@@ -102,29 +112,38 @@ export function DeviceList() {
                     </span>
                   </div>
                 </div>
-                {confirming === d.id ? (
-                  <div className="flex gap-2">
-                    <Button variant="ghost" onClick={() => setConfirming(null)}>
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      disabled={revoking === d.id}
-                      onClick={() => revoke(d.id)}
-                    >
-                      {revoking === d.id ? 'Revoking…' : 'Confirm revoke'}
-                    </Button>
-                  </div>
-                ) : (
-                  <Button variant="outline" onClick={() => setConfirming(d.id)}>
-                    Revoke
-                  </Button>
-                )}
+                <Button variant="outline" onClick={() => setTarget(d)}>
+                  Revoke
+                </Button>
               </CardContent>
             </Card>
           </li>
         ))}
       </ul>
+      <AlertDialog
+        open={target !== null}
+        onOpenChange={(open) => !open && !revoking && setTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke {target?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This e-reader stops syncing. It is unlinked at its next sync and must be linked again
+              to resume. Your reading statistics are kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={revoking}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={revoking}
+              onClick={() => target && revoke(target.id)}
+            >
+              {revoking ? 'Revoking…' : 'Revoke'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

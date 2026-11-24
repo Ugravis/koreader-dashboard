@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { DeviceList } from '@/components/dashboard/device-list'
+import { PairingSteps } from '@/components/pairing-steps'
 import { buttonVariants } from '@/components/ui/button'
 
 export const metadata: Metadata = { title: 'Devices · KOReader Dashboard' }
@@ -15,6 +16,7 @@ export default function DevicesPage() {
         </Link>
       </div>
       <DeviceList />
+      <PairingSteps />
     </>
   )
 }
