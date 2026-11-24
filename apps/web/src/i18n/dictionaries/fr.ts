@@ -282,6 +282,14 @@ export const fr: Dictionary = {
       system: 'Système',
     },
     language: { title: 'Langue', description: 'Langue de l’interface.' },
+    books: {
+      title: 'Livres en 3D',
+      description:
+        'Glissez un livre vers la gauche pour l’ouvrir et tourner les pages, vers la droite pour revenir, vers le haut ou le bas pour l’incliner. Les flèches du clavier marchent aussi.',
+      sound: 'Son des pages',
+      on: 'Activé',
+      off: 'Désactivé',
+    },
     devices: {
       title: 'Appareils',
       description: 'Liseuses associées à votre compte.',
@@ -405,6 +413,10 @@ export const fr: Dictionary = {
     csv: 'Livres (CSV)',
     json: 'Tout (JSON)',
     error: 'Export impossible. Réessayez.',
+  },
+  book3d: {
+    chapter: (n: number) => `Chapitre ${n}`,
+    end: 'Fin',
   },
   sync: {
     syncing: 'Synchro',

@@ -1,6 +1,6 @@
 'use client'
 
-import { Monitor, Moon, Plus, Sun } from 'lucide-react'
+import { Monitor, Moon, Plus, Sun, Volume2, VolumeX } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { PairingSteps } from '@/components/pairing-steps'
@@ -16,6 +16,7 @@ import {
   type Locale,
 } from '@/i18n/config'
 import { useI18n } from '@/i18n/provider'
+import { setPageSound, usePageSound } from '@/lib/page-sound'
 import { themes, useTheme, type Theme } from '@/lib/theme'
 import { useSessionContext } from '@/lib/use-session'
 import { cn } from '@/lib/utils'
@@ -33,6 +34,7 @@ export function SettingsView() {
       <GoalsSettings />
       <AppearanceSection />
       <LanguageSection />
+      <BooksSection />
       <DevicesSection />
       <DataExport />
       <AccountSection />
@@ -126,6 +128,32 @@ function Choice<T extends string>({
         </button>
       ))}
     </div>
+  )
+}
+
+function BooksSection() {
+  const { t } = useI18n()
+  const sound = usePageSound()
+  return (
+    <Section id="books" title={t.settings.books.title} description={t.settings.books.description}>
+      <Choice<'on' | 'off'>
+        label={t.settings.books.sound}
+        value={sound ? 'on' : 'off'}
+        onChange={(v) => setPageSound(v === 'on')}
+        options={[
+          {
+            value: 'on',
+            label: t.settings.books.on,
+            icon: <Volume2 className="size-4" aria-hidden />,
+          },
+          {
+            value: 'off',
+            label: t.settings.books.off,
+            icon: <VolumeX className="size-4" aria-hidden />,
+          },
+        ]}
+      />
+    </Section>
   )
 }
 

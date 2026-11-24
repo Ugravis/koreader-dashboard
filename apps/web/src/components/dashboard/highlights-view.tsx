@@ -15,7 +15,7 @@ import { useLiveQuery } from '@/lib/use-live-query'
 import { useToday } from '@/lib/use-today'
 
 /** KOReader highlight colors, as shown on the device. */
-const SWATCH: Record<string, string> = {
+export const SWATCH: Record<string, string> = {
   yellow: '#f5d90a',
   orange: '#f5a524',
   red: '#e5484d',

@@ -128,3 +128,17 @@ export function download(filename: string, content: string, type: string) {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+/** KOReader descriptions often contain HTML: keep the text only. */
+export const plainText = (html: string) =>
+  html
+    .replace(/<br\s*\/?>|<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()

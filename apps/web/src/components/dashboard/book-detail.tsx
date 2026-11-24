@@ -7,26 +7,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useI18n } from '@/i18n/provider'
 import { api, type Annotation } from '@/lib/api'
 import { cleanMeta } from '@/lib/covers'
-import { authorsOf } from '@/lib/reading'
+import { authorsOf, plainText } from '@/lib/reading'
 import { useLiveQuery } from '@/lib/use-live-query'
 import { authorHref } from './authors-view'
 import { BookCover } from './book-cover'
 import { BookStats } from './book-stats'
 import { BookStatusBadge, ProgressBar } from './book-status'
-
-/** KOReader descriptions often contain HTML: keep the text only. */
-const plainText = (html: string) =>
-  html
-    .replace(/<br\s*\/?>|<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
 
 export function BookDetail({ id }: { id: string }) {
   const { t: i18n, format, href } = useI18n()

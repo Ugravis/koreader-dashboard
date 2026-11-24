@@ -270,6 +270,14 @@ export const en = {
       system: 'System',
     },
     language: { title: 'Language', description: 'Language of the interface.' },
+    books: {
+      title: 'Books in 3D',
+      description:
+        'Drag a book left to open it and turn its pages, right to turn back, up or down to tilt it. Arrow keys work too.',
+      sound: 'Page sound',
+      on: 'On',
+      off: 'Off',
+    },
     devices: {
       title: 'Devices',
       description: 'E-readers linked to your account.',
@@ -392,6 +400,10 @@ export const en = {
     csv: 'Books (CSV)',
     json: 'Everything (JSON)',
     error: 'Could not export. Try again.',
+  },
+  book3d: {
+    chapter: (n: number) => `Chapter ${n}`,
+    end: 'The End',
   },
   sync: {
     syncing: 'Syncing',

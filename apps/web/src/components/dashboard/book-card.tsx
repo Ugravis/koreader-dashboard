@@ -22,7 +22,7 @@ export function BookCard({ book }: { book: Book }) {
         href={href(`/dashboard/books/${book.id}`)}
         className="group flex h-full flex-col gap-2 rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        <Book3D pages={book.pages} className="mr-[6%] mb-2">
+        <Book3D book={book} className="mr-[6%] mb-2">
           <BookCover
             key={book.cover_url ?? 'none'}
             md5={book.md5}
