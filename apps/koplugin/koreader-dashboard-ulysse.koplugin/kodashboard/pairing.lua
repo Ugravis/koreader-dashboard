@@ -1,16 +1,15 @@
 --[[--
 Device pairing UI (device authorization flow).
 
-Start -> show user code and QR code (verification URL) -> poll every `interval`
+Start -> full-screen page with the user code and a QR code (verification URL) -> poll every `interval`
 seconds until the user confirms on the web, the code expires or the user cancels.
 ]]
 
-local ButtonDialog = require("ui/widget/buttondialog")
 local Device = require("device")
 local InfoMessage = require("ui/widget/infomessage")
-local QRMessage = require("ui/widget/qrmessage")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
+local QRScreen = require("kodashboard/qrscreen")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -49,23 +48,20 @@ function Pairing:start()
     local expires_in = tonumber(data.expires_in) or 600
     self.deadline = os.time() + expires_in
 
-    self.dialog = ButtonDialog:new({
-        title = T(
-            _("Go to %1 and enter this code:\n\n%2\n\nThe code expires in %3 minutes."),
-            data.verification_url,
-            prettyCode(data.user_code),
-            math.floor(expires_in / 60)
+    if data.web_url then
+        self.settings:set("web_url", data.web_url)
+    end
+
+    self.dialog = QRScreen:new({
+        text = T(
+            _("Link this e-reader to KOReader Dashboard.\n\nScan the QR code with your phone, or open %1 and enter:"),
+            data.verification_url
         ),
-        title_align = "center",
-        dismissable = false,
+        code = prettyCode(data.user_code),
+        url = self.url,
+        footer = T(_("Waiting for confirmation… The code expires in %1 minutes."), math.floor(expires_in / 60)),
         buttons = {
             {
-                {
-                    text = _("Show QR code"),
-                    callback = function()
-                        self:showQR()
-                    end,
-                },
                 {
                     text = _("Cancel"),
                     callback = function()
@@ -77,16 +73,6 @@ function Pairing:start()
     })
     UIManager:show(self.dialog)
     self:schedulePoll()
-end
-
-function Pairing:showQR()
-    self.qr = QRMessage:new({
-        text = self.url,
-        dismiss_callback = function()
-            self.qr = nil
-        end,
-    })
-    UIManager:show(self.qr)
 end
 
 function Pairing:schedulePoll()
@@ -101,10 +87,6 @@ function Pairing:stop()
     if self.poll_func then
         UIManager:unschedule(self.poll_func)
         self.poll_func = nil
-    end
-    if self.qr then
-        UIManager:close(self.qr)
-        self.qr = nil
     end
     if self.dialog then
         UIManager:close(self.dialog)

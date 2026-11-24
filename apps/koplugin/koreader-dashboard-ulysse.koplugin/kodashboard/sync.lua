@@ -50,7 +50,12 @@ function Sync:run()
             break
         end
         if #batch.page_stats == 0 then
-            res = { ok = true, rows = rows, nothing = rows == 0 }
+            if rows == 0 then
+                -- Nothing to send: still check the device, to detect a revoke from the website.
+                res = self:checkStatus()
+            else
+                res = { ok = true, rows = rows }
+            end
             break
         end
 
@@ -86,6 +91,18 @@ function Sync:run()
     end
     self.running = false
     return res
+end
+
+--- Device status check. A 401 unlinks the device (handled by Api).
+function Sync:checkStatus()
+    local status, data = self.api:request("GET", "/v1/devices/current", nil, { auth = true })
+    if status == 200 then
+        if type(data) == "table" and data.web_url then
+            self.settings:set("web_url", data.web_url)
+        end
+        return { ok = true, rows = 0, nothing = true }
+    end
+    return { ok = false, rows = 0, err = self.api.errorMessage(status, data) }
 end
 
 --- Automatic trigger: throttled, never turns Wi-Fi on unless allowed in settings.

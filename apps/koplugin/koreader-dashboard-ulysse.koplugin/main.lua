@@ -11,6 +11,7 @@ local datetime = require("datetime")
 -- Submodules are namespaced: plugin dirs end up in the global package.path.
 local Api = require("kodashboard/api")
 local Pairing = require("kodashboard/pairing")
+local QRScreen = require("kodashboard/qrscreen")
 local Settings = require("kodashboard/settings")
 local Sync = require("kodashboard/sync")
 
@@ -31,9 +32,49 @@ function Dashboard:init()
             }))
         end,
     })
-    self.pairing = Pairing:new({ api = self.api, settings = self.settings })
+    self.pairing = Pairing:new({
+        api = self.api,
+        settings = self.settings,
+        on_linked = function()
+            self:refreshMenu()
+            -- First sync right away: the device is online at this point.
+            self:syncNow()
+        end,
+    })
     Sync:init(self.api, self.settings)
     self.ui.menu:registerToMainMenu(self)
+
+    if not self.settings:isLinked() and not self.settings:get("onboarding_shown") then
+        UIManager:nextTick(function()
+            self:showOnboarding()
+        end)
+    end
+end
+
+function Dashboard:refreshMenu()
+    if self.touchmenu_instance then
+        pcall(self.touchmenu_instance.updateItems, self.touchmenu_instance)
+    end
+end
+
+--- One-time panel after installing the plugin.
+function Dashboard:showOnboarding()
+    -- FileManager and ReaderUI both load the plugin: show it once.
+    if self.settings:get("onboarding_shown") or self.settings:isLinked() then
+        return
+    end
+    self.settings:set("onboarding_shown", true)
+    UIManager:show(ConfirmBox:new({
+        text = _("KOReader Dashboard is installed.\n\n"
+            .. "Link this e-reader to your account to sync your reading statistics. "
+            .. "A code and a QR code will be shown: open the link on your phone.\n\n"
+            .. "You can also do it later from Tools > KOReader Dashboard."),
+        ok_text = _("Link now"),
+        cancel_text = _("Later"),
+        ok_callback = function()
+            self:link()
+        end,
+    }))
 end
 
 function Dashboard:onCloseWidget()
@@ -105,6 +146,11 @@ function Dashboard:syncNow(on_done)
         UIManager:forceRePaint()
         local res = Sync:run()
         UIManager:close(progress)
+        if not self.settings:isLinked() then
+            -- Revoked from the website: Api already told the user.
+            self:refreshMenu()
+            return
+        end
         local text
         if res.ok and res.nothing then
             text = _("Already up to date.")
@@ -130,6 +176,26 @@ function Dashboard:lastSyncText()
         datetime.secondsToDateTime(time, G_reader_settings:isTrue("twelve_hour_clock")),
         self.settings:get("last_sync_rows") or 0
     )
+end
+
+function Dashboard:showWebsite()
+    local url = self.settings:get("web_url")
+    local screen
+    screen = QRScreen:new({
+        text = T(_("Open %1 on your phone or computer to see your reading statistics."), url),
+        url = url,
+        buttons = {
+            {
+                {
+                    text = _("Close"),
+                    callback = function()
+                        UIManager:close(screen)
+                    end,
+                },
+            },
+        },
+    })
+    UIManager:show(screen)
 end
 
 function Dashboard:syncSettingsMenu()
@@ -177,7 +243,11 @@ end
 
 function Dashboard:link()
     if not self.settings:get("server_url") then
-        UIManager:show(InfoMessage:new({ text = _("Set the server URL first.") }))
+        self:editServerUrl(function()
+            if self.settings:get("server_url") then
+                self:link()
+            end
+        end)
         return
     end
     NetworkMgr:runWhenOnline(function()
@@ -191,7 +261,22 @@ function Dashboard:unlink(on_done)
             .. "You can also revoke it from the website."),
         ok_text = _("Unlink"),
         ok_callback = function()
+            -- Revoke server side when online, so the device leaves the website list.
+            local revoked = false
+            if Sync.isConnected() then
+                local status = self.api:request("DELETE", "/v1/devices/current", nil, {
+                    auth = true,
+                    ignore_401 = true,
+                    timeout = { 5, 10 },
+                })
+                revoked = status == 204 or status == 401
+            end
             self.settings:clearLink()
+            if not revoked then
+                UIManager:show(InfoMessage:new({
+                    text = _("Unlinked on this e-reader. No network: revoke it from the website too."),
+                }))
+            end
             if on_done then
                 on_done()
             end
@@ -252,17 +337,44 @@ function Dashboard:addToMainMenu(menu_items)
         sub_item_table = {
             {
                 text_func = function()
+                    return self.settings:isLinked() and _("Status: linked") or _("Status: not linked")
+                end,
+                keep_menu_open = true,
+                callback = function(touchmenu_instance)
+                    self.touchmenu_instance = touchmenu_instance
+                    if self.settings:isLinked() then
+                        UIManager:show(InfoMessage:new({ text = self:lastSyncText() }))
+                    else
+                        self:link()
+                    end
+                end,
+            },
+            {
+                text_func = function()
+                    return T(_("Website: %1"), self.settings:get("web_url") or _("link the device first"))
+                end,
+                enabled_func = function()
+                    return self.settings:get("web_url") ~= nil
+                end,
+                keep_menu_open = true,
+                callback = function()
+                    self:showWebsite()
+                end,
+                separator = true,
+            },
+            {
+                text_func = function()
                     return self.settings:isLinked() and _("Unlink device") or _("Link this device")
                 end,
                 keep_menu_open = true,
                 callback = function(touchmenu_instance)
+                    self.touchmenu_instance = touchmenu_instance
                     local refresh = function()
                         touchmenu_instance:updateItems()
                     end
                     if self.settings:isLinked() then
                         self:unlink(refresh)
                     else
-                        self.pairing.on_linked = refresh
                         self:link()
                     end
                 end,
@@ -274,6 +386,7 @@ function Dashboard:addToMainMenu(menu_items)
                 end,
                 keep_menu_open = true,
                 callback = function(touchmenu_instance)
+                    self.touchmenu_instance = touchmenu_instance
                     self:syncNow(function()
                         touchmenu_instance:updateItems()
                     end)
@@ -313,6 +426,13 @@ function Dashboard:addToMainMenu(menu_items)
                     UIManager:show(InfoMessage:new({
                         text = T(_("KOReader Dashboard v%1\nSyncs your reading statistics."), VERSION),
                     }))
+                end,
+                separator = true,
+            },
+            {
+                text = _("Developed by Ulysse Pennetier"),
+                enabled_func = function()
+                    return false
                 end,
             },
         },

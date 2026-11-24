@@ -39,7 +39,7 @@ end
 --- @param method string
 --- @param path string e.g. "/v1/ingest"
 --- @param payload table|nil JSON body
---- @param opts table|nil { auth = true, timeout = { block, total } }
+--- @param opts table|nil { auth = true, timeout = { block, total }, ignore_401 = true }
 function Api:request(method, path, payload, opts)
     opts = opts or {}
     local base = self:baseUrl()
@@ -84,7 +84,7 @@ function Api:request(method, path, payload, opts)
     end
 
     local data = decode(table.concat(sink))
-    if code == 401 and opts.auth then
+    if code == 401 and opts.auth and not opts.ignore_401 then
         logger.warn("KOReaderDashboard: device token rejected, unlinking")
         self.settings:clearLink()
         if self.on_unauthorized then
