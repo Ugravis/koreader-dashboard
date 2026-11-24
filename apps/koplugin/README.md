@@ -13,6 +13,8 @@ koreader-dashboard-ulysse.koplugin/
   kodashboard/settings.lua LuaSettings in settings/koreader-dashboard-ulysse.lua
   kodashboard/api.lua      HTTP + JSON (socketutil timeouts, 401 unlinks the device)
   kodashboard/pairing.lua  link UI: code + QR, polling
+  kodashboard/stats.lua    read-only statistics.sqlite3 reads (batches of 5,000)
+  kodashboard/sync.lua     incremental sync, throttle, cursor
 ```
 
 Submodules live in `kodashboard/` because KOReader appends every plugin dir to the global `package.path`: a plain `require("api")` could load another plugin's module.
@@ -31,6 +33,20 @@ Submodules live in `kodashboard/` because KOReader appends every plugin dir to t
 3. **Unlink device** forgets the token locally. Revoke it from the website to invalidate it server side.
 
 Changing the server URL unlinks the device.
+
+## Sync
+
+Reads `page_stat_data` rows with `start_time > cursor` (joined to `book`, every `book` column sent) and posts them to `/v1/ingest` in batches of 5,000. The cursor only moves after a successful request. The statistics plugin flushes its buffer on document close, suspend and periodically: unflushed pages are sent on a later sync.
+
+| Trigger                | Default | Notes                                                      |
+| ---------------------- | ------- | ---------------------------------------------------------- |
+| Closing a book         | on      | 1 s after close, once the statistics plugin has flushed    |
+| Wake up                | on      | only if Wi-Fi is already connected                         |
+| Wi-Fi connects         | on      | `NetworkConnected` event                                   |
+| Periodic while reading | 30 min  | off / 15 / 30 / 60                                         |
+| **Sync now**           | —       | bypasses the throttle, may turn Wi-Fi on (KOReader prompt) |
+
+Automatic syncs: at most one every 5 minutes, never turn Wi-Fi on unless **Allow turning Wi-Fi on for automatic sync** is checked, no request when nothing is pending. A failure keeps the cursor and waits for the next trigger.
 
 ## Debug
 

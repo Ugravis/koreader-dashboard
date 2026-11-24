@@ -6,11 +6,13 @@ local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 local T = require("ffi/util").template
+local datetime = require("datetime")
 
 -- Submodules are namespaced: plugin dirs end up in the global package.path.
 local Api = require("kodashboard/api")
 local Pairing = require("kodashboard/pairing")
 local Settings = require("kodashboard/settings")
+local Sync = require("kodashboard/sync")
 
 local VERSION = "0.1.0"
 
@@ -30,6 +32,7 @@ function Dashboard:init()
         end,
     })
     self.pairing = Pairing:new({ api = self.api, settings = self.settings })
+    Sync:init(self.api, self.settings)
     self.ui.menu:registerToMainMenu(self)
 end
 
@@ -37,6 +40,139 @@ function Dashboard:onCloseWidget()
     if self.pairing then
         self.pairing:stop()
     end
+    self:unschedulePeriodic()
+end
+
+-- Sync triggers (see docs/plans/v0.1.0.md, section 0).
+
+function Dashboard:onReaderReady()
+    self:schedulePeriodic()
+end
+
+function Dashboard:onCloseDocument()
+    if self.settings:get("sync_on_close") then
+        -- Let the statistics plugin flush its buffer (its own onCloseDocument) first.
+        UIManager:scheduleIn(1, function()
+            Sync:auto("close")
+        end)
+    end
+end
+
+function Dashboard:onResume()
+    -- Wi-Fi often comes back a few seconds after resume: onNetworkConnected covers that case.
+    if self.settings:get("sync_on_resume") and Sync.isConnected() then
+        Sync:auto("resume")
+    end
+end
+
+function Dashboard:onNetworkConnected()
+    if self.settings:get("sync_on_network") then
+        UIManager:scheduleIn(2, function()
+            Sync:auto("network")
+        end)
+    end
+end
+
+function Dashboard:schedulePeriodic()
+    self:unschedulePeriodic()
+    local minutes = self.settings:get("sync_interval") or 0
+    if minutes <= 0 or not self.ui.document then
+        return
+    end
+    self.periodic_func = function()
+        Sync:auto("periodic")
+        UIManager:scheduleIn(minutes * 60, self.periodic_func)
+    end
+    UIManager:scheduleIn(minutes * 60, self.periodic_func)
+end
+
+function Dashboard:unschedulePeriodic()
+    if self.periodic_func then
+        UIManager:unschedule(self.periodic_func)
+        self.periodic_func = nil
+    end
+end
+
+--- Manual sync: bypasses the throttle, may turn Wi-Fi on (KOReader prompts per its own settings).
+function Dashboard:syncNow(on_done)
+    if not self.settings:isLinked() then
+        UIManager:show(InfoMessage:new({ text = _("Link this device first.") }))
+        return
+    end
+    NetworkMgr:runWhenOnline(function()
+        local progress = InfoMessage:new({ text = _("Syncing reading statistics…") })
+        UIManager:show(progress)
+        UIManager:forceRePaint()
+        local res = Sync:run()
+        UIManager:close(progress)
+        local text
+        if res.ok and res.nothing then
+            text = _("Already up to date.")
+        elseif res.ok then
+            text = T(_("Sync done: %1 pages sent."), res.rows)
+        else
+            text = T(_("Sync failed: %1"), res.err)
+        end
+        UIManager:show(InfoMessage:new({ text = text, timeout = res.ok and 3 or nil }))
+        if on_done then
+            on_done()
+        end
+    end)
+end
+
+function Dashboard:lastSyncText()
+    local time = self.settings:get("last_sync_time")
+    if not time then
+        return _("Last sync: never")
+    end
+    return T(
+        _("Last sync: %1 (%2 pages)"),
+        datetime.secondsToDateTime(time, G_reader_settings:isTrue("twelve_hour_clock")),
+        self.settings:get("last_sync_rows") or 0
+    )
+end
+
+function Dashboard:syncSettingsMenu()
+    local function toggle(key, text)
+        return {
+            text = text,
+            checked_func = function()
+                return self.settings:get(key) == true
+            end,
+            callback = function()
+                self.settings:set(key, not self.settings:get(key))
+            end,
+        }
+    end
+    local function interval(minutes, text)
+        return {
+            text = text,
+            radio = true,
+            checked_func = function()
+                return (self.settings:get("sync_interval") or 0) == minutes
+            end,
+            callback = function()
+                self.settings:set("sync_interval", minutes)
+                self:schedulePeriodic()
+            end,
+        }
+    end
+    return {
+        toggle("sync_on_close", _("Sync when closing a book")),
+        toggle("sync_on_resume", _("Sync on wake up")),
+        toggle("sync_on_network", _("Sync when Wi-Fi connects")),
+        {
+            text = _("Periodic sync while reading"),
+            sub_item_table = {
+                interval(0, _("Off")),
+                interval(15, _("Every 15 minutes")),
+                interval(30, _("Every 30 minutes")),
+                interval(60, _("Every 60 minutes")),
+            },
+            separator = true,
+        },
+        toggle("allow_wifi", _("Allow turning Wi-Fi on for automatic sync")),
+    }
 end
 
 function Dashboard:link()
@@ -130,6 +266,33 @@ function Dashboard:addToMainMenu(menu_items)
                         self:link()
                     end
                 end,
+            },
+            {
+                text = _("Sync now"),
+                enabled_func = function()
+                    return self.settings:isLinked()
+                end,
+                keep_menu_open = true,
+                callback = function(touchmenu_instance)
+                    self:syncNow(function()
+                        touchmenu_instance:updateItems()
+                    end)
+                end,
+            },
+            {
+                text_func = function()
+                    return self:lastSyncText()
+                end,
+                enabled_func = function()
+                    return false
+                end,
+            },
+            {
+                text = _("Sync settings"),
+                sub_item_table_func = function()
+                    return self:syncSettingsMenu()
+                end,
+                separator = true,
             },
             {
                 text_func = function()
