@@ -15,16 +15,9 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useI18n } from '@/i18n/provider'
 import { api, ApiError } from '@/lib/api'
 import { useSession } from '@/lib/use-session'
-
-const ERRORS: Record<string, string> = {
-  invalid_code: 'This code does not exist. Check it on your e-reader.',
-  code_used: 'This code has already been used.',
-  expired: 'This code has expired. Start linking again on your e-reader.',
-  rate_limited: 'Too many attempts. Wait a minute and try again.',
-  invalid_request: 'Enter the 8-character code shown on your e-reader.',
-}
 
 /** Formats as `ABCD-EFGH` while typing. */
 const formatCode = (value: string) => {
@@ -36,6 +29,8 @@ const formatCode = (value: string) => {
 }
 
 export function LinkDevice({ initialCode }: { initialCode: string }) {
+  const { t: i18n, href } = useI18n()
+  const t = i18n.link
   const session = useSession()
   const [code, setCode] = useState(formatCode(initialCode))
   const [state, setState] = useState<'idle' | 'pending' | 'done'>('idle')
@@ -50,7 +45,7 @@ export function LinkDevice({ initialCode }: { initialCode: string }) {
       setState('done')
     } catch (err) {
       setError(
-        err instanceof ApiError ? (ERRORS[err.code] ?? err.message) : 'Network error, try again.',
+        err instanceof ApiError ? (t.errors[err.code] ?? err.message) : i18n.common.networkError,
       )
       setState('idle')
     }
@@ -63,23 +58,21 @@ export function LinkDevice({ initialCode }: { initialCode: string }) {
     return (
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">Link a device</CardTitle>
-          <CardDescription>
-            Sign in first, then enter the code shown on your e-reader.
-          </CardDescription>
+          <CardTitle className="text-xl">{t.title}</CardTitle>
+          <CardDescription>{t.signInFirst}</CardDescription>
         </CardHeader>
         <CardFooter className="flex flex-col gap-3">
           <Link
-            href={`/sign-in?redirect=${back}`}
+            href={`${href('/sign-in')}?redirect=${back}`}
             className={buttonVariants({ size: 'lg', className: 'w-full' })}
           >
-            Sign in
+            {t.signIn}
           </Link>
           <Link
-            href={`/sign-up?redirect=${back}`}
+            href={`${href('/sign-up')}?redirect=${back}`}
             className={buttonVariants({ size: 'lg', variant: 'outline', className: 'w-full' })}
           >
-            Create an account
+            {t.signUp}
           </Link>
         </CardFooter>
       </Card>
@@ -91,12 +84,15 @@ export function LinkDevice({ initialCode }: { initialCode: string }) {
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <CheckCircle2 className="mx-auto size-10 text-primary" aria-hidden />
-          <CardTitle className="text-xl">Device linked</CardTitle>
-          <CardDescription>Your e-reader will finish linking in a few seconds.</CardDescription>
+          <CardTitle className="text-xl">{t.doneTitle}</CardTitle>
+          <CardDescription>{t.doneText}</CardDescription>
         </CardHeader>
         <CardFooter>
-          <Link href="/dashboard" className={buttonVariants({ size: 'lg', className: 'w-full' })}>
-            Go to dashboard
+          <Link
+            href={href('/dashboard')}
+            className={buttonVariants({ size: 'lg', className: 'w-full' })}
+          >
+            {t.goToDashboard}
           </Link>
         </CardFooter>
       </Card>
@@ -106,14 +102,12 @@ export function LinkDevice({ initialCode }: { initialCode: string }) {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
-        <CardTitle className="text-xl">Link a device</CardTitle>
-        <CardDescription>
-          Enter the code shown on your e-reader, signed in as {session.user.email}.
-        </CardDescription>
+        <CardTitle className="text-xl">{t.title}</CardTitle>
+        <CardDescription>{t.enterCode(session.user.email)}</CardDescription>
       </CardHeader>
       <form onSubmit={onSubmit}>
         <CardContent className="flex flex-col gap-2">
-          <Label htmlFor="code">Pairing code</Label>
+          <Label htmlFor="code">{t.codeLabel}</Label>
           <Input
             id="code"
             name="code"
@@ -140,7 +134,7 @@ export function LinkDevice({ initialCode }: { initialCode: string }) {
             className="w-full"
             disabled={state === 'pending' || code.replace('-', '').length !== 8}
           >
-            {state === 'pending' ? 'Linking…' : 'Link device'}
+            {state === 'pending' ? t.pending : t.submit}
           </Button>
         </CardFooter>
       </form>

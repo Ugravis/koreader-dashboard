@@ -2,20 +2,14 @@
 
 import { ArrowLeft, Quote, StickyNote } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useLiveVersion } from '@/lib/live-events'
-import { api, ApiError, type Annotation, type Book } from '@/lib/api'
+import { useI18n } from '@/i18n/provider'
+import { api, type Annotation } from '@/lib/api'
 import { cleanMeta } from '@/lib/covers'
-import { formatDate, formatDuration, formatNumber } from '@/lib/format'
+import { useLiveQuery } from '@/lib/use-live-query'
 import { BookCover } from './book-cover'
 import { BookStatusBadge, ProgressBar } from './book-status'
-
-type State =
-  | { status: 'loading' }
-  | { status: 'error'; notFound: boolean }
-  | { status: 'ready'; book: Book; annotations: Annotation[] }
 
 /** KOReader descriptions often contain HTML: keep the text only. */
 const plainText = (html: string) =>
@@ -32,23 +26,9 @@ const plainText = (html: string) =>
     .trim()
 
 export function BookDetail({ id }: { id: string }) {
-  const [state, setState] = useState<State>({ status: 'loading' })
-  // Refetch when a device sends data; the current data stays on screen meanwhile.
-  const liveVersion = useLiveVersion()
-
-  useEffect(() => {
-    let active = true
-    api
-      .getBook(id)
-      .then(({ book, annotations }) => active && setState({ status: 'ready', book, annotations }))
-      .catch((err) => {
-        if (!active || (err instanceof ApiError && err.status === 401)) return
-        setState({ status: 'error', notFound: err instanceof ApiError && err.status === 404 })
-      })
-    return () => {
-      active = false
-    }
-  }, [id, liveVersion])
+  const { t: i18n, format } = useI18n()
+  const t = i18n.book
+  const state = useLiveQuery(() => api.getBook(id), [id])
 
   if (state.status === 'loading') return <BookDetailSkeleton />
   if (state.status === 'error') {
@@ -56,23 +36,21 @@ export function BookDetail({ id }: { id: string }) {
       <div className="flex flex-col gap-4">
         <BackLink />
         <p role="alert" className="text-sm text-destructive">
-          {state.notFound
-            ? 'This book does not exist.'
-            : 'Could not load this book. Try again later.'}
+          {state.notFound ? t.notFound : t.loadError}
         </p>
       </div>
     )
   }
 
-  const { book, annotations } = state
+  const { book, annotations } = state.data
   const authors = cleanMeta(book.authors)?.split('\n').join(', ')
   const series = cleanMeta(book.series)
   const description = book.description ? plainText(book.description) : null
   const stats = [
-    { label: 'Progress', value: `${Math.round(book.progress * 100)}%` },
-    { label: 'Reading time', value: formatDuration(book.total_read_seconds) },
-    { label: 'Pages read', value: formatNumber(book.pages_read) },
-    { label: 'Last read', value: formatDate(book.last_read_at) },
+    { label: t.progress, value: `${Math.round(book.progress * 100)}%` },
+    { label: t.readingTime, value: format.duration(book.total_read_seconds) },
+    { label: t.pagesRead, value: format.number(book.pages_read) },
+    { label: t.lastRead, value: format.dateTime(book.last_read_at) },
   ]
 
   return (
@@ -95,7 +73,7 @@ export function BookDetail({ id }: { id: string }) {
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <BookStatusBadge status={book.status} />
             {book.rating ? (
-              <span className="text-sm" aria-label={`Rated ${book.rating} out of 5`}>
+              <span className="text-sm" aria-label={t.rated(book.rating)}>
                 {'★'.repeat(book.rating)}
                 <span className="text-muted-foreground">{'★'.repeat(5 - book.rating)}</span>
               </span>
@@ -106,7 +84,7 @@ export function BookDetail({ id }: { id: string }) {
 
       <Card>
         <CardContent className="flex flex-col gap-4">
-          <ProgressBar value={book.progress} label={`${book.title} progress`} />
+          <ProgressBar value={book.progress} label={i18n.books.progressLabel(book.title)} />
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {stats.map((s) => (
               <div key={s.label} className="flex flex-col gap-0.5">
@@ -121,7 +99,7 @@ export function BookDetail({ id }: { id: string }) {
       {book.review && (
         <Card>
           <CardHeader>
-            <CardTitle>My review</CardTitle>
+            <CardTitle>{t.review}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm whitespace-pre-line">{book.review}</p>
@@ -132,13 +110,13 @@ export function BookDetail({ id }: { id: string }) {
       <Card>
         <CardHeader>
           <CardTitle>
-            Highlights and notes{' '}
+            {t.annotations}{' '}
             <span className="font-normal text-muted-foreground">({annotations.length})</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {annotations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No highlights or notes for this book.</p>
+            <p className="text-sm text-muted-foreground">{t.noAnnotations}</p>
           ) : (
             <ul className="flex flex-col divide-y">
               {annotations.map((a) => (
@@ -152,7 +130,7 @@ export function BookDetail({ id }: { id: string }) {
       {description && (
         <Card>
           <CardHeader>
-            <CardTitle>Description</CardTitle>
+            <CardTitle>{t.description}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm whitespace-pre-line text-muted-foreground">{description}</p>
@@ -164,7 +142,9 @@ export function BookDetail({ id }: { id: string }) {
 }
 
 function AnnotationItem({ annotation: a }: { annotation: Annotation }) {
-  const meta = [a.chapter, a.pageno ? `page ${a.pageno}` : null, a.datetime?.slice(0, 10)]
+  const { t, format } = useI18n()
+  const day = a.datetime?.slice(0, 10)
+  const meta = [a.chapter, a.pageno ? t.book.page(a.pageno) : null, day && format.day(day)]
     .filter(Boolean)
     .join(' · ')
   return (
@@ -187,13 +167,14 @@ function AnnotationItem({ annotation: a }: { annotation: Annotation }) {
 }
 
 function BackLink() {
+  const { t, href } = useI18n()
   return (
     <Link
-      href="/dashboard"
-      className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      href={href('/dashboard/books')}
+      className="ml-12 inline-flex min-h-9 w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground md:ml-0"
     >
       <ArrowLeft className="size-4" aria-hidden />
-      Overview
+      {t.book.back}
     </Link>
   )
 }
@@ -201,7 +182,7 @@ function BackLink() {
 export function BookDetailSkeleton() {
   return (
     <div className="flex flex-col gap-6" aria-busy="true">
-      <Skeleton className="h-4 w-20" />
+      <Skeleton className="ml-12 h-9 w-20 md:ml-0" />
       <div className="flex gap-4">
         <Skeleton className="aspect-[2/3] w-24 rounded-md sm:w-32" />
         <div className="flex flex-1 flex-col gap-2">

@@ -1,11 +1,8 @@
+'use client'
+
+import { useI18n } from '@/i18n/provider'
 import type { BookStatus } from '@/lib/api'
 import { cn } from '@/lib/utils'
-
-const LABELS: Record<BookStatus, string> = {
-  complete: 'Finished',
-  reading: 'Reading',
-  abandoned: 'On hold',
-}
 
 export function BookStatusBadge({
   status,
@@ -14,16 +11,17 @@ export function BookStatusBadge({
   status: BookStatus | null
   className?: string
 }) {
+  const { t } = useI18n()
   if (!status) {
     // No status and no reading session: never opened in KOReader.
     return (
       <span
         className={cn(
-          'inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-xs font-medium text-muted-foreground',
+          'inline-flex items-center rounded-full border border-dashed bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground',
           className,
         )}
       >
-        New
+        {t.status.new}
       </span>
     )
   }
@@ -33,11 +31,11 @@ export function BookStatusBadge({
         'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
         status === 'complete' && 'border-transparent bg-primary text-primary-foreground',
         status === 'reading' && 'bg-muted text-foreground',
-        status === 'abandoned' && 'text-muted-foreground',
+        status === 'abandoned' && 'bg-background text-muted-foreground',
         className,
       )}
     >
-      {LABELS[status]}
+      {t.status[status]}
     </span>
   )
 }

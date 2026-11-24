@@ -1,35 +1,36 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useI18n } from '@/i18n/provider'
 import { API_URL } from '@/lib/api'
 
 const code = 'rounded bg-muted px-1.5 py-0.5 font-mono text-[0.8rem] break-words'
 
-/** How to link a KOReader e-reader, shown on /link and /dashboard/devices. */
+/** How to link a KOReader e-reader, shown on /link and in the settings. */
 export function PairingSteps({ className }: { className?: string }) {
+  const { pairing: t } = useI18n().t
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle>How to link your e-reader</CardTitle>
-        <CardDescription>About two minutes, once per e-reader.</CardDescription>
+        <CardTitle>{t.title}</CardTitle>
+        <CardDescription>{t.description}</CardDescription>
       </CardHeader>
       <CardContent>
         <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm">
           <li>
-            Plug the e-reader in over USB and copy the{' '}
-            <span className={code}>koreader-dashboard-ulysse.koplugin</span> folder into{' '}
-            <span className={code}>koreader/plugins/</span>. Restart KOReader.
+            {t.step1.before} <span className={code}>koreader-dashboard-ulysse.koplugin</span>{' '}
+            {t.step1.middle} <span className={code}>koreader/plugins/</span>
+            {t.step1.after}
           </li>
           <li>
-            On the e-reader, open <strong>Tools › KOReader Dashboard › Server URL</strong> and enter{' '}
+            {t.step2.before} <strong>{t.step2.menu}</strong> {t.step2.after}{' '}
             <span className={code}>{API_URL}</span>.
           </li>
           <li>
-            Tap <strong>Link this device</strong> (or <strong>Link now</strong> on the welcome
-            panel). A code and a QR code appear.
+            {t.step3.before} <strong>{t.step3.link}</strong> {t.step3.or}{' '}
+            <strong>{t.step3.linkNow}</strong> {t.step3.after}
           </li>
-          <li>
-            Scan the QR code with your phone, or open the link shown on the e-reader, then sign in
-            and confirm the code. Your reading statistics sync right after.
-          </li>
+          <li>{t.step4}</li>
         </ol>
       </CardContent>
     </Card>

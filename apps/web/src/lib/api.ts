@@ -91,6 +91,24 @@ export type Device = {
   covers_pending: number | null
 }
 
+export type DayStat = { date: string; seconds: number; pages: number }
+export type ReadingStats = {
+  timezone: string
+  /** Last days in `timezone`, oldest first. */
+  days: DayStat[]
+  /** Seconds per hour of the day, 0-23. */
+  by_hour: number[]
+  /** Seconds per weekday, Monday first. */
+  by_weekday: number[]
+  reading_days: number
+  current_streak: number
+  longest_streak: number
+  first_read_on: string | null
+}
+
+/** Browser time zone, so days and hours match the reader's clock. */
+const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
+
 export const api = {
   getSession: () => apiFetch<Session>('/v1/auth/get-session'),
   signUp: (body: { name: string; email: string; password: string }) =>
@@ -104,6 +122,8 @@ export const api = {
   listBooks: () => apiFetch<{ books: Book[] }>('/v1/me/books'),
   getBook: (id: string) =>
     apiFetch<{ book: Book; annotations: Annotation[] }>(`/v1/me/books/${id}`),
+  getStats: (days = 30) =>
+    apiFetch<ReadingStats>(`/v1/me/stats?days=${days}&tz=${encodeURIComponent(timeZone())}`),
   listDevices: () => apiFetch<{ devices: Device[] }>('/v1/devices'),
   revokeDevice: (id: string) => apiFetch<void>(`/v1/devices/${id}`, { method: 'DELETE' }),
 }

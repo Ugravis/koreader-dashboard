@@ -1,12 +1,12 @@
-import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { AuthForm } from '@/components/auth/auth-form'
 import { FormCardSkeleton } from '@/components/form-card-skeleton'
+import { pageTitle } from '@/i18n/server'
 import { safeRedirect } from '@/lib/redirect'
 
-export const metadata: Metadata = { title: 'Sign in · KOReader Dashboard' }
+export const generateMetadata = () => pageTitle('signIn')
 
-export default function SignInPage({ searchParams }: PageProps<'/sign-in'>) {
+export default function SignInPage({ searchParams }: PageProps<'/[lang]/sign-in'>) {
   return (
     <Suspense fallback={<FormCardSkeleton />}>
       <Form searchParams={searchParams} />
@@ -14,7 +14,7 @@ export default function SignInPage({ searchParams }: PageProps<'/sign-in'>) {
   )
 }
 
-async function Form({ searchParams }: Pick<PageProps<'/sign-in'>, 'searchParams'>) {
+async function Form({ searchParams }: Pick<PageProps<'/[lang]/sign-in'>, 'searchParams'>) {
   const { redirect } = await searchParams
   return <AuthForm mode="sign-in" redirectTo={safeRedirect(redirect)} />
 }

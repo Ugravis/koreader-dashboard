@@ -1,10 +1,10 @@
-import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { BookDetail, BookDetailSkeleton } from '@/components/dashboard/book-detail'
+import { pageTitle } from '@/i18n/server'
 
-export const metadata: Metadata = { title: 'Book · KOReader Dashboard' }
+export const generateMetadata = () => pageTitle('book')
 
-export default function BookPage({ params }: PageProps<'/dashboard/books/[id]'>) {
+export default function BookPage({ params }: PageProps<'/[lang]/dashboard/books/[id]'>) {
   return (
     <Suspense fallback={<BookDetailSkeleton />}>
       <Detail params={params} />
@@ -12,7 +12,7 @@ export default function BookPage({ params }: PageProps<'/dashboard/books/[id]'>)
   )
 }
 
-async function Detail({ params }: Pick<PageProps<'/dashboard/books/[id]'>, 'params'>) {
+async function Detail({ params }: Pick<PageProps<'/[lang]/dashboard/books/[id]'>, 'params'>) {
   const { id } = await params
   return <BookDetail id={id} />
 }
