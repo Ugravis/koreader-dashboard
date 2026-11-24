@@ -7,9 +7,11 @@ sidecar: their metadata comes from the Cover Browser cache (BookInfoManager), el
 file name. Only books changed since the last successful send are sent.
 ]]
 
+local DataStorage = require("datastorage")
 local DocSettings = require("docsettings")
 local DocumentRegistry = require("document/documentregistry")
 local ReadHistory = require("readhistory")
+local SQ3 = require("lua-ljsqlite3/init")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local util = require("util")
@@ -163,13 +165,60 @@ function Library.bookFromSidecar(path, data)
     }
 end
 
--- Cover Browser's metadata cache, when that plugin is enabled (its dir is in package.path).
-local function bookInfoManager()
-    if Library.bim == nil then
-        local ok, bim = pcall(require, "bookinfomanager")
-        Library.bim = ok and type(bim) == "table" and bim.getDocProps and bim or false
+-- Cover Browser's metadata cache, read only with a connection of our own: this runs in the
+-- sync subprocess, which must neither write it nor reuse a connection opened before the fork.
+local BOOKINFO_DB = DataStorage:getSettingsDir() .. "/bookinfo_cache.sqlite3"
+local BOOKINFO_SQL = "SELECT pages, title, authors, series, series_index, language, keywords, description "
+    .. "FROM bookinfo WHERE directory=? AND filename=? AND in_progress=0;"
+
+local function bookInfoDb()
+    if Library.bookinfo_db == nil then
+        local ok, conn = false, nil
+        if lfs.attributes(BOOKINFO_DB, "mode") == "file" then
+            ok, conn = pcall(SQ3.open, BOOKINFO_DB, "ro")
+        end
+        Library.bookinfo_db = ok and conn or false
+        if Library.bookinfo_db then
+            pcall(conn.set_busy_timeout, conn, 5000)
+        end
     end
-    return Library.bim or nil
+    return Library.bookinfo_db or nil
+end
+
+--- Metadata Cover Browser cached for a book file, or nil.
+local function cachedProps(path)
+    local conn = bookInfoDb()
+    if not conn then
+        return nil
+    end
+    local directory, filename = util.splitFilePathName(path)
+    local ok, row = pcall(function()
+        local stmt = conn:prepare(BOOKINFO_SQL)
+        local found = stmt:bind(directory, filename):step()
+        stmt:close()
+        return found
+    end)
+    if not ok or not row then
+        return nil
+    end
+    return {
+        pages = tonumber(row[1]),
+        title = row[2],
+        authors = row[3],
+        series = row[4],
+        series_index = row[5],
+        language = row[6],
+        keywords = row[7],
+        description = row[8],
+    }
+end
+
+--- Closes the metadata cache connection, if open.
+function Library.close()
+    if Library.bookinfo_db then
+        pcall(Library.bookinfo_db.close, Library.bookinfo_db)
+    end
+    Library.bookinfo_db = nil
 end
 
 --- Calibre names files "Title - Author.ext".
@@ -185,12 +234,7 @@ function Library.bookFromFile(path)
     if not ok or not md5 then
         return nil
     end
-    local props
-    local bim = bookInfoManager()
-    if bim then
-        local got, info = pcall(bim.getDocProps, bim, path)
-        props = got and type(info) == "table" and info or nil
-    end
+    local props = cachedProps(path)
     local fallback = Library.propsFromFilename(path)
     props = props or {}
     return {
