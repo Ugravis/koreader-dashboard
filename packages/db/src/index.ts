@@ -12,7 +12,19 @@ export type Db = ReturnType<typeof createDb>
 export { schema }
 
 // Query helpers re-exported so consumers share this package's drizzle-orm instance.
-export { and, count, countDistinct, desc, eq, gt, isNull, max, sql, sum } from 'drizzle-orm'
+export {
+  and,
+  count,
+  countDistinct,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  max,
+  sql,
+  sum,
+} from 'drizzle-orm'
 
 const MIGRATIONS_FOLDER = new URL('../drizzle', import.meta.url).pathname
 

@@ -5,6 +5,7 @@ import { auth } from './auth.ts'
 import { env } from './env.ts'
 import { errorBody, onError } from './lib/errors.ts'
 import { deviceRoutes } from './routes/devices.ts'
+import { ingestRoutes } from './routes/ingest.ts'
 import { meRoutes } from './routes/me.ts'
 import type { AppEnv } from './types.ts'
 
@@ -35,6 +36,7 @@ export function createApp() {
   app.on(['GET', 'POST'], '/v1/auth/*', (c) => auth.handler(c.req.raw))
   app.route('/v1/me', meRoutes)
   app.route('/v1/devices', deviceRoutes)
+  app.route('/v1/ingest', ingestRoutes)
 
   app.doc31('/openapi.json', {
     openapi: '3.1.0',
