@@ -52,7 +52,9 @@ function Dashboard:init()
     self.ui.menu:registerToMainMenu(self)
 
     if not self.settings:isLinked() and not self.settings:get("onboarding_shown") then
-        UIManager:nextTick(function()
+        -- Not nextTick: at startup the page could be shown before the file browser or reader
+        -- and end up hidden below it. Wait until the UI is settled.
+        UIManager:scheduleIn(3, function()
             -- FileManager and ReaderUI both load the plugin: show it once.
             if self.settings:get("onboarding_shown") or self.settings:isLinked() then
                 return

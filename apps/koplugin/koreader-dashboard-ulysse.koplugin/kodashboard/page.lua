@@ -22,6 +22,8 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local Screen = Device.screen
 
 local Page = InputContainer:extend({
+    -- Tells UIManager the widgets below are fully hidden (no need to repaint them).
+    covers_fullscreen = true,
     title = nil, -- large, bold
     text = nil, -- body, above the code
     code = nil, -- optional, shown big
@@ -103,10 +105,9 @@ function Page:init()
 end
 
 function Page:onShow()
-    -- Full refresh: no e-ink ghosting.
-    UIManager:setDirty(self, function()
-        return "full", self.frame.dimen
-    end)
+    -- Full-screen flashing refresh of the whole screen: no e-ink ghosting, and no dependency
+    -- on a widget size that is not computed yet.
+    UIManager:setDirty(self, "full")
     return true
 end
 
