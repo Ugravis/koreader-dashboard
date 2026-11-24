@@ -6,7 +6,7 @@ export { app, db }
 
 export async function resetDb() {
   await db.execute(
-    sql`TRUNCATE "page_stats", "books", "device_pairings", "devices", "session", "account", "verification", "user" CASCADE`,
+    sql`TRUNCATE "annotations", "page_stats", "books", "device_pairings", "devices", "session", "account", "verification", "user" CASCADE`,
   )
 }
 

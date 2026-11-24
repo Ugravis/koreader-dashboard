@@ -5,6 +5,7 @@ import { db, pairDevice, request, resetDb, signUp } from './helpers.ts'
 const payload = {
   books: [
     {
+      ref: '1',
       md5: 'abc123',
       title: 'Dune',
       authors: 'Frank Herbert',
@@ -19,8 +20,8 @@ const payload = {
     },
   ],
   page_stats: [
-    { md5: 'abc123', page: 1, start_time: 1_764_000_000, duration: 60, total_pages: 600 },
-    { md5: 'abc123', page: 2, start_time: 1_764_000_060, duration: 60, total_pages: 600 },
+    { book_ref: '1', page: 1, start_time: 1_764_000_000, duration: 60, total_pages: 600 },
+    { book_ref: '1', page: 2, start_time: 1_764_000_060, duration: 60, total_pages: 600 },
   ],
 }
 
@@ -49,29 +50,32 @@ describe('ingest', () => {
     const summary = await request('/v1/me/summary', { headers: { cookie } })
     expect(await summary.json()).toEqual({
       books_count: 1,
+      finished_count: 0,
       total_read_seconds: 120,
       total_pages_read: 2,
     })
   })
 
-  it('accepts page stats for a book sent earlier, rejects unknown md5', async () => {
+  it('keeps two books sharing an md5 apart, rejects unknown book_ref', async () => {
     const { cookie } = await signUp()
     const token = await pairDevice(cookie)
-    await ingest(token, { books: payload.books })
-
-    const later = {
-      md5: 'abc123',
+    // KOReader can cache one md5 for two different books (title differs).
+    const other = { ...payload.books[0]!, ref: '2', title: 'Le Silmarillion', authors: 'Tolkien' }
+    const stat = {
+      book_ref: '2',
       page: 3,
       start_time: 1_764_000_200,
       duration: 30,
       total_pages: 600,
     }
-    expect(await (await ingest(token, { page_stats: [later] })).json()).toEqual({
-      accepted: 1,
-      cursor: 1_764_000_200,
-    })
+    const res = await ingest(token, { books: [...payload.books, other], page_stats: [stat] })
+    expect(await res.json()).toEqual({ accepted: 1, cursor: 1_764_000_200 })
+    expect(await db.select().from(schema.books)).toHaveLength(2)
 
-    const bad = await ingest(token, { page_stats: [{ ...later, md5: 'nope' }] })
+    const bad = await ingest(token, {
+      books: payload.books,
+      page_stats: [{ ...stat, book_ref: '9' }],
+    })
     expect(bad.status).toBe(400)
     expect(await db.select().from(schema.pageStats)).toHaveLength(1)
   })
@@ -88,7 +92,7 @@ describe('ingest', () => {
   it('lists books with progress, most recently read first', async () => {
     const { cookie } = await signUp()
     const token = await pairDevice(cookie)
-    const other = { ...payload.books[0]!, md5: 'zzz999', title: 'Unread' }
+    const other = { ...payload.books[0]!, ref: '2', md5: 'zzz999', title: 'Unread' }
     await ingest(token, { books: [...payload.books, other], page_stats: payload.page_stats })
 
     const res = await request('/v1/me/books', { headers: { cookie } })
@@ -97,11 +101,11 @@ describe('ingest', () => {
     expect(books.map((b) => b.title)).toEqual(['Dune', 'Unread'])
     expect(books[0]).toMatchObject({
       total_read_seconds: 120,
-      last_page: 2,
-      total_pages: 600,
+      pages_read: 2,
+      status: 'reading',
       progress: 2 / 600,
       last_read_at: new Date(1_764_000_060 * 1000).toISOString(),
     })
-    expect(books[1]).toMatchObject({ progress: 0, last_read_at: null, total_pages: 600 })
+    expect(books[1]).toMatchObject({ progress: 0, last_read_at: null, status: null })
   })
 })
