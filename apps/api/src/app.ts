@@ -9,6 +9,7 @@ import { deviceRoutes } from './routes/devices.ts'
 import { eventRoutes } from './routes/events.ts'
 import { ingestRoutes } from './routes/ingest.ts'
 import { libraryRoutes } from './routes/library.ts'
+import { insightRoutes } from './routes/insights.ts'
 import { meRoutes } from './routes/me.ts'
 import type { AppEnv } from './types.ts'
 
@@ -31,7 +32,7 @@ export function createApp() {
       origin: env.WEB_ORIGIN,
       credentials: true,
       allowHeaders: ['Content-Type', 'Authorization'],
-      allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     }),
   )
 
@@ -39,6 +40,7 @@ export function createApp() {
   app.on(['GET', 'POST'], '/v1/auth/*', (c) => auth.handler(c.req.raw))
   app.route('/v1/me/events', eventRoutes)
   app.route('/v1/me', meRoutes)
+  app.route('/v1/me', insightRoutes)
   app.route('/v1/devices', deviceRoutes)
   app.route('/v1/ingest', ingestRoutes)
   app.route('/v1/library/covers', coverRoutes)
