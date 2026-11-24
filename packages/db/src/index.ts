@@ -10,6 +10,7 @@ export function createDb(databaseUrl: string) {
 
 export type Db = ReturnType<typeof createDb>
 export { schema }
+export { createListener } from './listener.ts'
 
 // Query helpers re-exported so consumers share this package's drizzle-orm instance.
 export {

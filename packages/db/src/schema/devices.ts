@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { integer, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { user } from './auth.ts'
 
 export const devices = pgTable(
@@ -13,6 +13,10 @@ export const devices = pgTable(
     // sha256 hex of the device token. The token itself is never stored.
     tokenHash: text().notNull().unique(),
     lastSyncAt: timestamp({ withTimezone: true }),
+    // Sync progress reported by the plugin, shown live on the website.
+    syncState: text({ enum: ['running', 'idle'] }),
+    syncStep: text({ enum: ['stats', 'library', 'covers'] }),
+    coversPending: integer(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp({ withTimezone: true }),
   },
