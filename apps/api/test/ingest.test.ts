@@ -84,4 +84,24 @@ describe('ingest', () => {
     const res = await ingest(token, { books: payload.books, page_stats: stats })
     expect(res.status).toBe(400)
   })
+
+  it('lists books with progress, most recently read first', async () => {
+    const { cookie } = await signUp()
+    const token = await pairDevice(cookie)
+    const other = { ...payload.books[0]!, md5: 'zzz999', title: 'Unread' }
+    await ingest(token, { books: [...payload.books, other], page_stats: payload.page_stats })
+
+    const res = await request('/v1/me/books', { headers: { cookie } })
+    expect(res.status).toBe(200)
+    const { books } = (await res.json()) as { books: Record<string, unknown>[] }
+    expect(books.map((b) => b.title)).toEqual(['Dune', 'Unread'])
+    expect(books[0]).toMatchObject({
+      total_read_seconds: 120,
+      last_page: 2,
+      total_pages: 600,
+      progress: 2 / 600,
+      last_read_at: new Date(1_764_000_060 * 1000).toISOString(),
+    })
+    expect(books[1]).toMatchObject({ progress: 0, last_read_at: null, total_pages: 600 })
+  })
 })

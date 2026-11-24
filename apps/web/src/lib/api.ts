@@ -39,6 +39,19 @@ export type User = { id: string; email: string; name: string }
 export type Session = { user: User } | null
 
 export type Summary = { books_count: number; total_read_seconds: number; total_pages_read: number }
+export type Book = {
+  id: string
+  md5: string
+  title: string
+  authors: string | null
+  series: string | null
+  language: string | null
+  total_read_seconds: number
+  last_read_at: string | null
+  last_page: number | null
+  total_pages: number | null
+  progress: number
+}
 export type Device = {
   id: string
   name: string
@@ -57,6 +70,7 @@ export const api = {
   confirmPairing: (userCode: string) =>
     apiFetch<void>('/v1/devices/pair/confirm', { method: 'POST', json: { user_code: userCode } }),
   getSummary: () => apiFetch<Summary>('/v1/me/summary'),
+  listBooks: () => apiFetch<{ books: Book[] }>('/v1/me/books'),
   listDevices: () => apiFetch<{ devices: Device[] }>('/v1/devices'),
   revokeDevice: (id: string) => apiFetch<void>(`/v1/devices/${id}`, { method: 'DELETE' }),
 }
