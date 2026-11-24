@@ -28,6 +28,7 @@ describe('device pairing', () => {
     const s = await start()
     expect(s.user_code).toMatch(new RegExp(`^[${USER_CODE_ALPHABET}]{8}$`))
     expect(s.verification_url_complete).toContain(`?code=${s.user_code}`)
+    expect(s).toMatchObject({ web_url: 'http://localhost:3000' })
 
     expect((await poll(s.device_code)).status).toBe(428)
 
@@ -89,5 +90,27 @@ describe('device pairing', () => {
     expect((await del(other.cookie)).status).toBe(404)
     expect((await del(cookie)).status).toBe(204)
     expect((await call(token)).status).toBe(401)
+  })
+
+  it('lets a device read its status and unlink itself', async () => {
+    const { cookie } = await signUp()
+    const token = await pairDevice(cookie, 'Kindle PW')
+    const auth = { authorization: `Bearer ${token}` }
+
+    const current = await request('/v1/devices/current', { headers: auth })
+    expect(current.status).toBe(200)
+    expect(await current.json()).toMatchObject({
+      name: 'Kindle PW',
+      web_url: 'http://localhost:3000',
+    })
+
+    expect((await request('/v1/devices/current', { method: 'DELETE', headers: auth })).status).toBe(
+      204,
+    )
+    expect((await request('/v1/devices/current', { headers: auth })).status).toBe(401)
+    const list = (await (await request('/v1/devices', { headers: { cookie } })).json()) as {
+      devices: unknown[]
+    }
+    expect(list.devices).toHaveLength(0)
   })
 })

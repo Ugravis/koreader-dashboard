@@ -9,6 +9,7 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test',
       DATABASE_URL: TEST_DATABASE_URL,
+      WEB_ORIGIN: 'http://localhost:3000',
       BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret-0000',
     },
     globalSetup: ['./test/global-setup.ts'],
