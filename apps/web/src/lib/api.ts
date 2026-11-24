@@ -38,19 +38,43 @@ export async function apiFetch<T>(path: string, init: RequestInit & { json?: unk
 export type User = { id: string; email: string; name: string }
 export type Session = { user: User } | null
 
-export type Summary = { books_count: number; total_read_seconds: number; total_pages_read: number }
+export type Summary = {
+  books_count: number
+  finished_count: number
+  total_read_seconds: number
+  total_pages_read: number
+}
+export type BookStatus = 'reading' | 'complete' | 'abandoned'
 export type Book = {
   id: string
+  ids: string[]
   md5: string
   title: string
   authors: string | null
   series: string | null
+  series_index: number | null
   language: string | null
-  total_read_seconds: number
-  last_read_at: string | null
-  last_page: number | null
-  total_pages: number | null
+  isbn: string | null
+  description: string | null
+  status: BookStatus | null
+  status_modified: string | null
+  rating: number | null
+  review: string | null
   progress: number
+  total_read_seconds: number
+  pages_read: number
+  last_read_at: string | null
+  highlights_count: number
+  notes_count: number
+}
+export type Annotation = {
+  id: string
+  text: string | null
+  note: string | null
+  chapter: string | null
+  pageno: number | null
+  datetime: string | null
+  color: string | null
 }
 export type Device = {
   id: string
@@ -71,6 +95,8 @@ export const api = {
     apiFetch<void>('/v1/devices/pair/confirm', { method: 'POST', json: { user_code: userCode } }),
   getSummary: () => apiFetch<Summary>('/v1/me/summary'),
   listBooks: () => apiFetch<{ books: Book[] }>('/v1/me/books'),
+  getBook: (id: string) =>
+    apiFetch<{ book: Book; annotations: Annotation[] }>(`/v1/me/books/${id}`),
   listDevices: () => apiFetch<{ devices: Device[] }>('/v1/devices'),
   revokeDevice: (id: string) => apiFetch<void>(`/v1/devices/${id}`, { method: 'DELETE' }),
 }

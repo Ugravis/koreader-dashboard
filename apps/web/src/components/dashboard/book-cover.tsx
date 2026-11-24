@@ -2,27 +2,42 @@
 
 import { useEffect, useState } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
-import { findCover } from '@/lib/covers'
+import { findCover, isbnCoverUrl } from '@/lib/covers'
+import { cn } from '@/lib/utils'
 
-type Props = { md5: string; title: string; authors: string | null }
+type Props = {
+  md5: string
+  title: string
+  authors: string | null
+  isbn: string | null
+  className?: string
+}
 
-export function BookCover({ md5, title, authors }: Props) {
-  const [src, setSrc] = useState<string | null | undefined>(undefined)
+/** ISBN cover, then title + author search, then the title's initial. */
+export function BookCover({ md5, title, authors, isbn, className }: Props) {
+  const [useIsbn, setUseIsbn] = useState(Boolean(isbn))
+  const [found, setFound] = useState<string | null | undefined>(undefined)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
+    if (useIsbn) return
     let active = true
-    findCover({ md5, title, authors }).then((url) => active && setSrc(url))
+    findCover({ md5, title, authors }).then((url) => active && setFound(url))
     return () => {
       active = false
     }
-  }, [md5, title, authors])
+  }, [useIsbn, md5, title, authors])
 
-  const box = 'aspect-[2/3] w-14 shrink-0 overflow-hidden rounded-md sm:w-16'
+  const src = useIsbn && isbn ? isbnCoverUrl(isbn) : failed ? null : found
+  const box = cn('aspect-[2/3] w-14 shrink-0 overflow-hidden rounded-md sm:w-16', className)
   if (src === undefined) return <Skeleton className={box} />
   if (src === null) {
     return (
       <div
-        className={`${box} flex items-center justify-center bg-muted text-xl font-semibold text-muted-foreground`}
+        className={cn(
+          box,
+          'flex items-center justify-center bg-muted text-xl font-semibold text-muted-foreground',
+        )}
         aria-hidden
       >
         {title.trim().charAt(0).toUpperCase() || '?'}
@@ -36,8 +51,9 @@ export function BookCover({ md5, title, authors }: Props) {
       src={src}
       alt=""
       loading="lazy"
-      className={`${box} bg-muted object-cover`}
-      onError={() => setSrc(null)}
+      className={cn(box, 'bg-muted object-cover')}
+      // ISBN miss: fall back to the search, then to the initial.
+      onError={() => (useIsbn ? setUseIsbn(false) : setFailed(true))}
     />
   )
 }

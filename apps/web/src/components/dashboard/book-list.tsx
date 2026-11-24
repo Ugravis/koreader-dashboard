@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -7,6 +8,7 @@ import { api, ApiError, type Book } from '@/lib/api'
 import { cleanMeta } from '@/lib/covers'
 import { formatDuration } from '@/lib/format'
 import { BookCover } from './book-cover'
+import { BookStatusBadge, ProgressBar } from './book-status'
 
 type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; books: Book[] }
 
@@ -64,28 +66,31 @@ function BookRow({ book }: { book: Book }) {
   const percent = Math.round(book.progress * 100)
   const authors = cleanMeta(book.authors)?.split('\n').join(', ')
   return (
-    <li className="flex gap-3 py-3 first:pt-0 last:pb-0">
-      <BookCover md5={book.md5} title={book.title} authors={book.authors} />
-      <div className="flex min-w-0 flex-1 flex-col gap-1 py-0.5">
-        <p className="truncate font-medium">{book.title}</p>
-        {authors && <p className="truncate text-sm text-muted-foreground">{authors}</p>}
-        <div className="mt-auto flex flex-col gap-1">
-          <div
-            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-            role="progressbar"
-            aria-label={`${book.title} progress`}
-            aria-valuenow={percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+    <li className="py-3 first:pt-0 last:pb-0">
+      <Link
+        href={`/dashboard/books/${book.id}`}
+        className="-mx-2 flex gap-3 rounded-lg p-2 outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <BookCover md5={book.md5} title={book.title} authors={book.authors} isbn={book.isbn} />
+        <div className="flex min-w-0 flex-1 flex-col gap-1 py-0.5">
+          <div className="flex items-start justify-between gap-2">
+            <p className="truncate font-medium">{book.title}</p>
+            <BookStatusBadge status={book.status} className="shrink-0" />
           </div>
-          <p className="flex justify-between text-xs text-muted-foreground tabular-nums">
-            <span>{percent}%</span>
-            <span>{formatDuration(book.total_read_seconds)}</span>
-          </p>
+          {authors && <p className="truncate text-sm text-muted-foreground">{authors}</p>}
+          <div className="mt-auto flex flex-col gap-1">
+            <ProgressBar value={book.progress} label={`${book.title} progress`} />
+            <p className="flex justify-between text-xs text-muted-foreground tabular-nums">
+              <span>{percent}%</span>
+              <span>
+                {book.highlights_count > 0 &&
+                  `${book.highlights_count} highlight${book.highlights_count > 1 ? 's' : ''} · `}
+                {formatDuration(book.total_read_seconds)}
+              </span>
+            </p>
+          </div>
         </div>
-      </div>
+      </Link>
     </li>
   )
 }
