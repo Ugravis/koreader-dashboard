@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useLiveVersion } from '@/lib/live-events'
 import { api, ApiError, type Summary } from '@/lib/api'
 import { formatDuration, formatNumber } from '@/lib/format'
 
@@ -13,6 +14,8 @@ type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; su
 
 export function SummaryCards() {
   const [state, setState] = useState<State>({ status: 'loading' })
+  // Refetch when a device sends data; the current data stays on screen meanwhile.
+  const liveVersion = useLiveVersion()
 
   useEffect(() => {
     let active = true
@@ -27,7 +30,7 @@ export function SummaryCards() {
     return () => {
       active = false
     }
-  }, [])
+  }, [liveVersion])
 
   if (state.status === 'error') {
     return (

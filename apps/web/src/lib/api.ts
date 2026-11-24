@@ -55,6 +55,8 @@ export type Book = {
   series_index: number | null
   language: string | null
   isbn: string | null
+  /** API path of the cover sent by the device, null when none. */
+  cover_url: string | null
   description: string | null
   status: BookStatus | null
   status_modified: string | null
@@ -82,6 +84,11 @@ export type Device = {
   model: string | null
   last_sync_at: string | null
   created_at: string
+  /** A sync is in progress on the device (live). */
+  syncing: boolean
+  sync_step: 'stats' | 'library' | 'covers' | null
+  /** Covers left to send, after the current or last sync. */
+  covers_pending: number | null
 }
 
 export const api = {
