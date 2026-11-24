@@ -25,6 +25,7 @@ export type BookRow = {
   last_total_pages: number | null
   highlights_count: string
   notes_count: string
+  cover_updated_at: Date | null
 }
 
 export type BookGroup = {
@@ -38,6 +39,8 @@ export type BookGroup = {
   series_index: number | null
   language: string | null
   isbn: string | null
+  /** Path of the cover sent by the plugin, versioned for caching; null when none. */
+  cover_url: string | null
   description: string | null
   status: 'reading' | 'complete' | 'abandoned' | null
   status_modified: string | null
@@ -51,7 +54,7 @@ export type BookGroup = {
   notes_count: number
 }
 
-const { books, pageStats, annotations } = schema
+const { books, bookCovers, pageStats, annotations } = schema
 
 export async function loadBookRows(db: Db, userId: string) {
   const res = await db.execute<BookRow>(sql`
@@ -61,7 +64,8 @@ export async function loadBookRows(db: Db, userId: string) {
            coalesce(t.seconds, 0) AS total_read_seconds,
            coalesce(t.pages_read, 0) AS pages_read,
            l.start_time AS last_read_at, l.page AS last_page, l.total_pages AS last_total_pages,
-           coalesce(a.highlights, 0) AS highlights_count, coalesce(a.notes, 0) AS notes_count
+           coalesce(a.highlights, 0) AS highlights_count, coalesce(a.notes, 0) AS notes_count,
+           c.updated_at AS cover_updated_at
     FROM ${books} b
     LEFT JOIN (
       SELECT book_id, sum(duration) AS seconds, count(DISTINCT page) AS pages_read
@@ -77,6 +81,8 @@ export async function loadBookRows(db: Db, userId: string) {
              count(*) FILTER (WHERE coalesce(note, '') <> '') AS notes
       FROM ${annotations} WHERE user_id = ${userId} GROUP BY book_id
     ) a ON a.book_id = b.id
+    LEFT JOIN ${bookCovers} c
+      ON c.user_id = b.user_id AND c.md5 = b.md5 AND c.file_path = b.file_path
     WHERE b.user_id = ${userId}
   `)
   return res.rows
@@ -136,6 +142,9 @@ export function groupBooks(rows: BookRow[]): BookGroup[] {
       const lastRead = members
         .map((m) => (m.last_read_at ? new Date(m.last_read_at).getTime() : 0))
         .reduce((a, b) => Math.max(a, b), 0)
+      const coverAt = members
+        .map((m) => (m.cover_updated_at ? new Date(m.cover_updated_at).getTime() : 0))
+        .reduce((a, b) => Math.max(a, b), 0)
       const pick = <K extends keyof BookRow>(k: K) => members.find((m) => m[k] != null)?.[k] ?? null
 
       return {
@@ -148,6 +157,7 @@ export function groupBooks(rows: BookRow[]): BookGroup[] {
         series_index: pick('series_index'),
         language: pick('language'),
         isbn: members.map((m) => parseIsbn(m.identifiers)).find(Boolean) ?? null,
+        cover_url: coverAt ? `/v1/me/books/${primary.id}/cover?v=${coverAt}` : null,
         description: pick('description'),
         status: complete
           ? 'complete'

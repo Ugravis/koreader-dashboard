@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
 import { and, eq, inArray, notInArray, schema, sql } from '@koreader-dashboard/db'
 import { db } from '../db.ts'
+import { publish } from '../lib/events.ts'
 import { HttpError } from '../lib/errors.ts'
 import { errorResponse } from '../lib/openapi.ts'
 import { requireDevice } from '../middleware/device.ts'
@@ -180,5 +181,6 @@ export const libraryRoutes = new OpenAPIHono<AppEnv>().openapi(syncLibrary, asyn
     if (rows.length > 0) await tx.insert(annotations).values(rows)
   })
 
+  await publish(userId, { type: 'data' })
   return c.json({ books: unique.length }, 200)
 })

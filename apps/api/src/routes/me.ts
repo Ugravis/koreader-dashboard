@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
-import { and, eq, inArray, schema } from '@koreader-dashboard/db'
+import { and, eq, inArray, schema, sql } from '@koreader-dashboard/db'
 import { db } from '../db.ts'
 import { groupBooks, loadBookRows } from '../lib/books.ts'
 import { HttpError } from '../lib/errors.ts'
@@ -36,6 +36,10 @@ const BookSchema = z
     series_index: z.number().nullable(),
     language: z.string().nullable(),
     isbn: z.string().nullable(),
+    cover_url: z
+      .string()
+      .nullable()
+      .openapi({ description: 'Cover sent by the device (API path), null when none' }),
     description: z.string().nullable(),
     status: z.enum(['reading', 'complete', 'abandoned']).nullable(),
     status_modified: z.string().nullable(),
@@ -97,6 +101,22 @@ const getBook = createRoute({
   },
 })
 
+const getCover = createRoute({
+  tags: ['me'],
+  middleware: [requireSession] as const,
+  method: 'get',
+  path: '/books/{id}/cover',
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    200: {
+      content: { 'image/jpeg': { schema: z.string().openapi({ format: 'binary' }) } },
+      description: 'Cover',
+    },
+    401: errorResponse('Not signed in'),
+    404: errorResponse('No cover for this book'),
+  },
+})
+
 const getSummary = createRoute({
   tags: ['me'],
   middleware: [requireSession] as const,
@@ -105,7 +125,7 @@ const getSummary = createRoute({
   responses: { 200: json(SummarySchema, 'Totals'), 401: errorResponse('Not signed in') },
 })
 
-const { annotations } = schema
+const { annotations, bookCovers, books } = schema
 
 export const meRoutes = new OpenAPIHono<AppEnv>()
   .openapi(getMe, (c) => {
@@ -135,6 +155,28 @@ export const meRoutes = new OpenAPIHono<AppEnv>()
       .where(and(eq(annotations.userId, userId), inArray(annotations.bookId, book.ids)))
       .orderBy(annotations.pageno, annotations.datetime)
     return c.json({ book, annotations: rows }, 200)
+  })
+  .openapi(getCover, async (c) => {
+    const userId = c.get('user').id
+    const id = c.req.valid('param').id
+    // Newest cover among the book's merged entries (same title + authors, as groupBooks).
+    const res = await db.execute<{ image: Buffer }>(sql`
+      SELECT c.image FROM ${books} b
+      JOIN ${books} m ON m.user_id = b.user_id
+        AND lower(trim(m.title)) = lower(trim(b.title))
+        AND lower(trim(coalesce(m.authors, ''))) = lower(trim(coalesce(b.authors, '')))
+      JOIN ${bookCovers} c
+        ON c.user_id = m.user_id AND c.md5 = m.md5 AND c.file_path = m.file_path
+      WHERE b.id = ${id} AND b.user_id = ${userId}
+      ORDER BY c.updated_at DESC LIMIT 1
+    `)
+    const image = res.rows[0]?.image
+    if (!image) throw new HttpError(404, 'not_found', 'No cover for this book')
+    // The URL carries the cover version (?v=), so the browser can keep it.
+    return c.body(new Uint8Array(image), 200, {
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'private, max-age=31536000, immutable',
+    })
   })
   .openapi(getSummary, async (c) => {
     const books = groupBooks(await loadBookRows(db, c.get('user').id))

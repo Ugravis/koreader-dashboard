@@ -10,6 +10,7 @@ import {
   USER_CODE_LENGTH,
 } from '../lib/crypto.ts'
 import { errorBody, HttpError } from '../lib/errors.ts'
+import { publish } from '../lib/events.ts'
 import { errorResponse } from '../lib/openapi.ts'
 import { rateLimit } from '../lib/rate-limit.ts'
 import { requireDevice } from '../middleware/device.ts'
@@ -47,6 +48,10 @@ const PairConfirmBody = z.object({ user_code: z.string().min(USER_CODE_LENGTH).m
 const PairPollBody = z.object({ device_code: z.string().min(1) })
 const PairPollResponse = z.object({ device_token: z.string() }).openapi('DeviceToken')
 
+const SYNC_STEPS = ['stats', 'library', 'covers'] as const
+/** A "running" state older than this is a sync cut short (device asleep, Wi-Fi lost). */
+const SYNC_STALE_MS = 2 * 60_000
+
 const DeviceSchema = z
   .object({
     id: z.uuid(),
@@ -54,8 +59,21 @@ const DeviceSchema = z
     model: z.string().nullable(),
     last_sync_at: z.iso.datetime().nullable(),
     created_at: z.iso.datetime(),
+    syncing: z.boolean().openapi({ description: 'A sync is in progress on the device' }),
+    sync_step: z.enum(SYNC_STEPS).nullable(),
+    covers_pending: z
+      .number()
+      .int()
+      .nullable()
+      .openapi({ description: 'Covers left to send, after the current or last sync' }),
   })
   .openapi('Device')
+
+const SyncStatusBody = z.object({
+  state: z.enum(['running', 'idle']),
+  step: z.enum(SYNC_STEPS).optional(),
+  covers_pending: z.number().int().min(0).optional(),
+})
 
 // --- Routes
 
@@ -133,6 +151,18 @@ const getCurrent = createRoute({
   middleware: [requireDevice] as const,
   responses: {
     200: json(CurrentDeviceSchema, 'The calling device, when still linked'),
+    401: errorResponse('Missing or revoked device token'),
+  },
+})
+
+const putSyncStatus = createRoute({
+  method: 'put',
+  path: '/current/sync',
+  tags: ['devices'],
+  middleware: [requireDevice] as const,
+  request: { body: { content: { 'application/json': { schema: SyncStatusBody } } } },
+  responses: {
+    204: { description: 'Sync progress stored' },
     401: errorResponse('Missing or revoked device token'),
   },
 })
@@ -246,6 +276,7 @@ export const deviceRoutes = new OpenAPIHono<AppEnv>()
       return true
     })
     if (!created) return c.json(errorBody('expired', 'Pairing already completed'), 410)
+    await publish(userId, { type: 'devices' })
     return c.json({ device_token: deviceToken }, 200)
   })
   .openapi(getCurrent, async (c) => {
@@ -256,11 +287,36 @@ export const deviceRoutes = new OpenAPIHono<AppEnv>()
     if (!device) throw new HttpError(401, 'invalid_token', 'Device token revoked or unknown')
     return c.json({ ...device, web_url: env.WEB_ORIGIN }, 200)
   })
+  .openapi(putSyncStatus, async (c) => {
+    const body = c.req.valid('json')
+    const { id, userId } = c.get('device')
+    const [d] = await db
+      .update(devices)
+      .set({
+        syncState: body.state,
+        syncStep: body.state === 'running' ? (body.step ?? null) : null,
+        ...(body.covers_pending === undefined ? {} : { coversPending: body.covers_pending }),
+      })
+      .where(eq(devices.id, id))
+      .returning()
+    if (d) {
+      await publish(userId, {
+        type: 'sync',
+        device_id: d.id,
+        syncing: body.state === 'running',
+        sync_step: d.syncStep,
+        covers_pending: d.coversPending,
+        last_sync_at: (d.lastSyncAt ?? new Date()).toISOString(),
+      })
+    }
+    return c.body(null, 204)
+  })
   .openapi(unlinkCurrent, async (c) => {
     await db
       .update(devices)
       .set({ revokedAt: new Date() })
       .where(eq(devices.id, c.get('device').id))
+    await publish(c.get('device').userId, { type: 'devices' })
     return c.body(null, 204)
   })
   .openapi(listDevices, async (c) => {
@@ -277,6 +333,12 @@ export const deviceRoutes = new OpenAPIHono<AppEnv>()
           model: d.model,
           last_sync_at: d.lastSyncAt?.toISOString() ?? null,
           created_at: d.createdAt.toISOString(),
+          syncing:
+            d.syncState === 'running' &&
+            d.lastSyncAt !== null &&
+            Date.now() - d.lastSyncAt.getTime() < SYNC_STALE_MS,
+          sync_step: d.syncStep,
+          covers_pending: d.coversPending,
         })),
       },
       200,
@@ -295,5 +357,6 @@ export const deviceRoutes = new OpenAPIHono<AppEnv>()
       )
       .returning({ id: devices.id })
     if (revoked.length === 0) throw new HttpError(404, 'not_found', 'Unknown device')
+    await publish(c.get('user').id, { type: 'devices' })
     return c.body(null, 204)
   })

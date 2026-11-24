@@ -4,7 +4,9 @@ import { logger } from 'hono/logger'
 import { auth } from './auth.ts'
 import { env } from './env.ts'
 import { errorBody, onError } from './lib/errors.ts'
+import { coverRoutes } from './routes/covers.ts'
 import { deviceRoutes } from './routes/devices.ts'
+import { eventRoutes } from './routes/events.ts'
 import { ingestRoutes } from './routes/ingest.ts'
 import { libraryRoutes } from './routes/library.ts'
 import { meRoutes } from './routes/me.ts'
@@ -35,9 +37,11 @@ export function createApp() {
 
   app.get('/health', (c) => c.json({ status: 'ok' }))
   app.on(['GET', 'POST'], '/v1/auth/*', (c) => auth.handler(c.req.raw))
+  app.route('/v1/me/events', eventRoutes)
   app.route('/v1/me', meRoutes)
   app.route('/v1/devices', deviceRoutes)
   app.route('/v1/ingest', ingestRoutes)
+  app.route('/v1/library/covers', coverRoutes)
   app.route('/v1/library', libraryRoutes)
 
   app.doc31('/openapi.json', {

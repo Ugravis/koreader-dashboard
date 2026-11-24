@@ -6,7 +6,7 @@ export { app, db }
 
 export async function resetDb() {
   await db.execute(
-    sql`TRUNCATE "annotations", "page_stats", "books", "device_pairings", "devices", "session", "account", "verification", "user" CASCADE`,
+    sql`TRUNCATE "book_covers", "annotations", "page_stats", "books", "device_pairings", "devices", "session", "account", "verification", "user" CASCADE`,
   )
 }
 
@@ -32,7 +32,8 @@ export async function signUp(email = `u${Date.now()}${Math.random()}@test.dev`) 
     .getSetCookie()
     .map((c) => c.split(';')[0])
     .join('; ')
-  return { cookie, email }
+  const { user } = (await res.json()) as { user: { id: string } }
+  return { cookie, email, userId: user.id }
 }
 
 type PairStart = { device_code: string; user_code: string; verification_url_complete: string }
