@@ -20,6 +20,8 @@ pnpm --filter @koreader-dashboard/api dev
 | `GET /v1/me`    | session | Current user                           |
 | `/openapi.json` | —       | OpenAPI 3.1 spec                       |
 
+Device routes use `Authorization: Bearer <device_token>`. Only sha256 hashes of tokens and device codes are stored.
+
 ## Tests
 
 Vitest against a real Postgres database (`koreader_dashboard_test`, created and migrated automatically). Override with `TEST_DATABASE_URL`.

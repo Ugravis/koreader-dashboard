@@ -1,10 +1,10 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { cors } from 'hono/cors'
-import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
 import { auth } from './auth.ts'
 import { env } from './env.ts'
-import { errorBody, HttpError } from './lib/errors.ts'
+import { errorBody, onError } from './lib/errors.ts'
+import { deviceRoutes } from './routes/devices.ts'
 import { meRoutes } from './routes/me.ts'
 import type { AppEnv } from './types.ts'
 
@@ -34,6 +34,7 @@ export function createApp() {
   app.get('/health', (c) => c.json({ status: 'ok' }))
   app.on(['GET', 'POST'], '/v1/auth/*', (c) => auth.handler(c.req.raw))
   app.route('/v1/me', meRoutes)
+  app.route('/v1/devices', deviceRoutes)
 
   app.doc31('/openapi.json', {
     openapi: '3.1.0',
@@ -41,14 +42,7 @@ export function createApp() {
   })
 
   app.notFound((c) => c.json(errorBody('not_found', 'Not found'), 404))
-  app.onError((err, c) => {
-    if (err instanceof HttpError) return c.json(errorBody(err.code, err.message), err.status)
-    if (err instanceof HTTPException) {
-      return c.json(errorBody('http_error', err.message), err.status)
-    }
-    console.error(err)
-    return c.json(errorBody('internal_error', 'Internal server error'), 500)
-  })
+  app.onError(onError)
 
   return app
 }
