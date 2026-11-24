@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
-import { and, eq, inArray, schema, sql } from '@koreader-dashboard/db'
+import { schema, sql } from '@koreader-dashboard/db'
 import { db } from '../db.ts'
 import { HttpError } from '../lib/errors.ts'
 import { errorResponse } from '../lib/openapi.ts'
@@ -12,8 +12,10 @@ export const MAX_BOOKS = 1000
 const unixSeconds = z.number().int().nonnegative()
 const count = z.number().int().nonnegative()
 
-// One KOReader `book` row (statistics.sqlite3). Every column is kept, except the local id.
+// One KOReader `book` row (statistics.sqlite3). Every column is kept. `ref` is a key chosen
+// by the client (KOReader's local id) that page_stats use to reference the book in this request.
 const IngestBook = z.object({
+  ref: z.string().min(1).max(64),
   md5: z.string().min(1).max(64),
   title: z.string().max(1000),
   authors: z.string().max(1000).nullish(),
@@ -27,9 +29,9 @@ const IngestBook = z.object({
   total_read_pages: count.nullish(),
 })
 
-// One KOReader `page_stat_data` row, with the book referenced by md5.
+// One KOReader `page_stat_data` row, with the book referenced by `ref`.
 const IngestPageStat = z.object({
-  md5: z.string().min(1).max(64),
+  book_ref: z.string().min(1).max(64),
   page: count,
   start_time: unixSeconds,
   duration: count,
@@ -62,7 +64,7 @@ const ingest = createRoute({
   request: { body: { content: { 'application/json': { schema: IngestBody } } } },
   responses: {
     200: { content: { 'application/json': { schema: IngestResponse } }, description: 'Stored' },
-    400: errorResponse('Invalid payload or unknown book md5'),
+    400: errorResponse('Invalid payload or unknown book_ref'),
     401: errorResponse('Missing or revoked device token'),
   },
 })
@@ -75,11 +77,14 @@ export const ingestRoutes = new OpenAPIHono<AppEnv>().openapi(ingest, async (c) 
   const { userId } = c.get('device')
 
   const result = await db.transaction(async (tx) => {
+    // ref -> books.id
     const ids = new Map<string, string>()
 
     if (body.books.length > 0) {
-      // Last occurrence wins when a payload repeats an md5.
-      const unique = [...new Map(body.books.map((b) => [b.md5, b])).values()]
+      // Same identity as KOReader (md5, title, authors): last occurrence wins.
+      const key = (b: { md5: string; title: string; authors?: string | null }) =>
+        JSON.stringify([b.md5, b.title, b.authors ?? null])
+      const unique = [...new Map(body.books.map((b) => [key(b), b])).values()]
       const upserted = await tx
         .insert(books)
         .values(
@@ -99,10 +104,8 @@ export const ingestRoutes = new OpenAPIHono<AppEnv>().openapi(ingest, async (c) 
           })),
         )
         .onConflictDoUpdate({
-          target: [books.userId, books.md5],
+          target: [books.userId, books.md5, books.title, books.authors],
           set: {
-            title: sql`excluded.title`,
-            authors: sql`excluded.authors`,
             series: sql`excluded.series`,
             language: sql`excluded.language`,
             pages: sql`excluded.pages`,
@@ -114,23 +117,16 @@ export const ingestRoutes = new OpenAPIHono<AppEnv>().openapi(ingest, async (c) 
             updatedAt: sql`now()`,
           },
         })
-        .returning({ id: books.id, md5: books.md5 })
-      for (const b of upserted) ids.set(b.md5, b.id)
+        .returning({ id: books.id, md5: books.md5, title: books.title, authors: books.authors })
+      const byKey = new Map(upserted.map((b) => [key(b), b.id]))
+      for (const b of body.books) ids.set(b.ref, byKey.get(key(b))!)
     }
 
     if (body.page_stats.length === 0) return { accepted: 0, cursor: null }
 
-    const missing = [...new Set(body.page_stats.map((p) => p.md5))].filter((m) => !ids.has(m))
-    if (missing.length > 0) {
-      const known = await tx
-        .select({ id: books.id, md5: books.md5 })
-        .from(books)
-        .where(and(eq(books.userId, userId), inArray(books.md5, missing)))
-      for (const b of known) ids.set(b.md5, b.id)
-      const unknown = missing.filter((m) => !ids.has(m))
-      if (unknown.length > 0) {
-        throw new HttpError(400, 'unknown_book', `Unknown book md5: ${unknown.join(', ')}`)
-      }
+    const unknown = [...new Set(body.page_stats.map((p) => p.book_ref))].filter((r) => !ids.has(r))
+    if (unknown.length > 0) {
+      throw new HttpError(400, 'unknown_book', `Unknown book_ref: ${unknown.join(', ')}`)
     }
 
     const inserted = await tx
@@ -138,7 +134,7 @@ export const ingestRoutes = new OpenAPIHono<AppEnv>().openapi(ingest, async (c) 
       .values(
         body.page_stats.map((p) => ({
           userId,
-          bookId: ids.get(p.md5)!,
+          bookId: ids.get(p.book_ref)!,
           page: p.page,
           startTime: new Date(p.start_time * 1000),
           duration: p.duration,
