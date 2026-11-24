@@ -23,10 +23,20 @@ local MAX_BATCHES = 20
 local MAX_COVERS = 10
 -- Pause between two cover batches when covers are left, so the UI stays usable.
 local COVERS_PAUSE_SECONDS = 10
+-- Live progress is best effort: never let it hold the UI (socketutil's default block
+-- timeout is 60 s, and every request runs on the UI thread).
+local REPORT_TIMEOUT = { 2, 4 }
+-- Automatic syncs back off while the server is unreachable: 2, 4, 8... minutes, up to 1 h.
+local BACKOFF_BASE_SECONDS = 120
+local BACKOFF_MAX_SECONDS = 3600
 
 local Sync = {
     last_attempt = 0,
     running = false,
+    -- Consecutive runs that hit a network error (server unreachable).
+    failures = 0,
+    -- Set during a run once a request hit a network error: no more requests in that run.
+    unreachable = false,
 }
 
 function Sync:init(api, settings)
@@ -50,8 +60,13 @@ function Sync:run()
     end
     self.running = true
     self.last_attempt = os.time()
-    self:report("running", "stats")
+    self.unreachable = false
     local covers_pending
+
+    -- Quick reachability probe: an unreachable server fails here in seconds, not minutes.
+    if not self:report("running", "stats") then
+        return self:finish({ ok = false, rows = 0, err = "server unreachable" })
+    end
 
     local rows, batches, res = 0, 0, nil
     while batches < MAX_BATCHES do
@@ -74,6 +89,7 @@ function Sync:run()
             timeout = { socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT },
         })
         if status ~= 200 then
+            self.unreachable = status == nil
             res = { ok = false, rows = rows, err = self.api.errorMessage(status, data) }
             break
         end
@@ -108,15 +124,35 @@ function Sync:run()
     if res.ok then
         self.settings:set("last_sync_time", os.time())
         self.settings:set("last_sync_rows", rows)
-    else
-        logger.warn("KOReaderDashboard: sync failed", res.err)
     end
     if self.settings:isLinked() then
         self:report("idle", nil, covers_pending)
     end
-    self.running = false
+    res = self:finish(res)
     self:scheduleCovers(covers_pending)
     return res
+end
+
+--- Ends a run: updates the backoff and clears the running flag.
+function Sync:finish(res)
+    if res.ok then
+        self.failures = 0
+    else
+        logger.warn("KOReaderDashboard: sync failed", res.err)
+        if self.unreachable then
+            self.failures = self.failures + 1
+        end
+    end
+    self.running = false
+    return res
+end
+
+--- Seconds to wait before the next automatic sync.
+function Sync:minInterval()
+    if self.failures == 0 then
+        return THROTTLE_SECONDS
+    end
+    return math.min(BACKOFF_BASE_SECONDS * 2 ^ (self.failures - 1), BACKOFF_MAX_SECONDS)
 end
 
 --- Sends the covers left in further batches, while each batch makes progress (a book
@@ -130,10 +166,11 @@ function Sync:scheduleCovers(left)
             return
         end
         self.running = true
+        self.unreachable = false
         local now_left = self:syncCovers()
         self:report("idle", nil, now_left)
         self.running = false
-        if now_left < left then
+        if now_left < left and not self.unreachable then
             self:scheduleCovers(now_left)
         end
     end)
@@ -158,6 +195,7 @@ function Sync:syncLibrary()
             timeout = { socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT },
         })
         if status ~= 200 then
+            self.unreachable = status == nil
             return { ok = false, books = books, err = self.api.errorMessage(status, data) }
         end
         for _, item in ipairs(batch) do
@@ -175,19 +213,29 @@ local function urlEncode(text)
     end))
 end
 
---- Live progress for the website. Best effort: the result is ignored.
+--- Live progress for the website. Best effort, short timeout; skipped once the server
+--- proved unreachable in this run.
 --- @param state string "running" or "idle"
 --- @param step string|nil "stats", "library" or "covers" while running
 --- @param covers_pending number|nil covers left to send
+--- @return boolean false on a network error
 function Sync:report(state, step, covers_pending)
-    self.api:request("PUT", "/v1/devices/current/sync", {
+    if self.unreachable then
+        return false
+    end
+    local status = self.api:request("PUT", "/v1/devices/current/sync", {
         state = state,
         step = step,
         covers_pending = covers_pending,
     }, {
         auth = true,
-        timeout = { socketutil.DEFAULT_BLOCK_TIMEOUT, socketutil.DEFAULT_TOTAL_TIMEOUT },
+        timeout = REPORT_TIMEOUT,
     })
+    if status == nil then
+        self.unreachable = true
+        return false
+    end
+    return true
 end
 
 --- Books whose cover is not handled yet: { { path, marker } }.
@@ -211,7 +259,9 @@ function Sync:syncCovers()
     local sent = self.settings:get("covers_uploaded") or {}
     local pending = pendingCovers(sent)
     local left = #pending
-    self:report("running", "covers", left)
+    if not self:report("running", "covers", left) then
+        return left
+    end
     for i, item in ipairs(pending) do
         if i > MAX_COVERS then
             break
@@ -227,6 +277,7 @@ function Sync:syncCovers()
                 timeout = { socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT },
             })
             if status == nil then
+                self.unreachable = true
                 break -- Network down: stop, retry next run.
             end
             -- 404: book not on the server yet. Other errors (bad or too large image) are
@@ -254,6 +305,7 @@ function Sync:checkStatus()
         end
         return { ok = true, rows = 0, nothing = true }
     end
+    self.unreachable = status == nil
     return { ok = false, rows = 0, err = self.api.errorMessage(status, data) }
 end
 
@@ -262,7 +314,7 @@ function Sync:auto(reason)
     if not self.settings:isLinked() or self.running then
         return
     end
-    if os.time() - self.last_attempt < THROTTLE_SECONDS then
+    if os.time() - self.last_attempt < self:minInterval() then
         logger.dbg("KOReaderDashboard: sync throttled", reason)
         return
     end
