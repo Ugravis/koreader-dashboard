@@ -8,6 +8,7 @@ plugin instances.
 local NetworkMgr = require("ui/network/manager")
 local logger = require("logger")
 local socketutil = require("socketutil")
+local Library = require("kodashboard/library")
 local Stats = require("kodashboard/stats")
 
 local THROTTLE_SECONDS = 5 * 60
@@ -50,12 +51,7 @@ function Sync:run()
             break
         end
         if #batch.page_stats == 0 then
-            if rows == 0 then
-                -- Nothing to send: still check the device, to detect a revoke from the website.
-                res = self:checkStatus()
-            else
-                res = { ok = true, rows = rows }
-            end
+            res = { ok = true, rows = rows }
             break
         end
 
@@ -84,6 +80,17 @@ function Sync:run()
     res = res or { ok = true, rows = rows }
 
     if res.ok then
+        local lib = self:syncLibrary()
+        res.books = lib.books
+        if not lib.ok then
+            res = { ok = false, rows = rows, err = lib.err }
+        elseif rows == 0 and lib.books == 0 then
+            -- Nothing sent at all: still check the device, to detect a revoke from the website.
+            res = self:checkStatus()
+        end
+    end
+
+    if res.ok then
         self.settings:set("last_sync_time", os.time())
         self.settings:set("last_sync_rows", rows)
     else
@@ -91,6 +98,36 @@ function Sync:run()
     end
     self.running = false
     return res
+end
+
+--- Sends sidecars changed since the last successful send.
+function Sync:syncLibrary()
+    local sent = self.settings:get("library_sent") or {}
+    local ok, changed = pcall(Library.collectChanged, sent)
+    if not ok then
+        logger.warn("KOReaderDashboard: library scan failed", changed)
+        return { ok = true, books = 0 }
+    end
+    local books = 0
+    for _, batch in ipairs(Library.batches(changed)) do
+        local payload = {}
+        for _, item in ipairs(batch) do
+            table.insert(payload, item.book)
+        end
+        local status, data = self.api:post("/v1/library", { books = payload }, {
+            auth = true,
+            timeout = { socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT },
+        })
+        if status ~= 200 then
+            return { ok = false, books = books, err = self.api.errorMessage(status, data) }
+        end
+        for _, item in ipairs(batch) do
+            sent[item.path] = item.mtime
+        end
+        self.settings:set("library_sent", sent)
+        books = books + #batch
+    end
+    return { ok = true, books = books }
 end
 
 --- Device status check. A 401 unlinks the device (handled by Api).

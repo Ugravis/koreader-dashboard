@@ -21,6 +21,8 @@ local DEFAULTS = {
     last_sync_rows = nil,
     -- Website base URL, returned by the API when linking or checking the device status.
     web_url = nil,
+    -- Sidecar modification time last sent, per book path.
+    library_sent = nil,
     -- One-time onboarding panel at startup.
     onboarding_shown = false,
 }
@@ -59,7 +61,7 @@ end
 
 --- Clears the device token and sync state (unlink or revoked token).
 function Settings:clearLink()
-    for _, key in ipairs({ "device_token", "cursor", "last_sync_time", "last_sync_rows" }) do
+    for _, key in ipairs({ "device_token", "cursor", "last_sync_time", "last_sync_rows", "library_sent" }) do
         self.data:delSetting(key)
     end
     self.data:flush()

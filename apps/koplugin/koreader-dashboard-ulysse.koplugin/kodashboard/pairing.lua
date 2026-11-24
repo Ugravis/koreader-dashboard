@@ -111,6 +111,7 @@ function Pairing:poll()
         self:stop()
         self.settings:set("device_token", data.device_token)
         self.settings:set("cursor", 0)
+        self.settings:set("library_sent", nil)
         UIManager:show(InfoMessage:new({ text = _("Device linked to KOReader Dashboard."), timeout = 3 }))
         if self.on_linked then
             self.on_linked()

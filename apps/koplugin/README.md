@@ -16,6 +16,7 @@ koreader-dashboard-ulysse.koplugin/
   kodashboard/page.lua     full-screen page (welcome, pairing code + QR code, website QR code)
   kodashboard/stats.lua    read-only statistics.sqlite3 reads (batches of 5,000)
   kodashboard/sync.lua     incremental sync, throttle, cursor
+  kodashboard/library.lua  book sidecars: status, KOReader %, metadata, annotations
 ```
 
 Submodules live in `kodashboard/` because KOReader appends every plugin dir to the global `package.path`: a plain `require("api")` could load another plugin's module.
@@ -52,6 +53,10 @@ Reads `page_stat_data` rows with `start_time > cursor` (joined to `book`, every 
 | **Sync now**           | —       | bypasses the throttle, may turn Wi-Fi on (KOReader prompt) |
 
 Automatic syncs: at most one every 5 minutes, never turn Wi-Fi on unless **Allow turning Wi-Fi on for automatic sync** is checked, no request when nothing is pending. A failure keeps the cursor and waits for the next trigger. When nothing is pending, a sync only checks the device status (`GET /v1/devices/current`), which detects a revoke from the website.
+
+### Library (sidecars)
+
+After the page stats, each sync reads the sidecar (`metadata.<ext>.lua`) of the books in the reading history and in the home folder, and sends those changed since the last successful send to `/v1/library`: reading status (reading / finished / on hold, also when set from the file browser), KOReader's percent, rating and review, metadata (series, language, keywords, identifiers, description), file path, and every highlight and note (text, note, chapter, page, date). Sidecars are read with `dofile`, never written.
 
 ## Debug
 

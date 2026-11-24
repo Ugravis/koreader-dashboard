@@ -182,7 +182,7 @@ function Dashboard:syncNow(on_done)
         if res.ok and res.nothing then
             text = _("Already up to date.")
         elseif res.ok then
-            text = T(_("Sync done: %1 pages sent."), res.rows)
+            text = T(_("Sync done: %1 pages and %2 books sent."), res.rows, res.books or 0)
         else
             text = T(_("Sync failed: %1"), res.err)
         end
