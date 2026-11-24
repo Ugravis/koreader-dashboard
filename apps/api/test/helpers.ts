@@ -34,3 +34,19 @@ export async function signUp(email = `u${Date.now()}${Math.random()}@test.dev`) 
     .join('; ')
   return { cookie, email }
 }
+
+type PairStart = { device_code: string; user_code: string; verification_url_complete: string }
+
+/** Runs the whole pairing flow for a signed-in user and returns the device token. */
+export async function pairDevice(cookie: string, deviceName = 'Kindle') {
+  const start = (await (
+    await request('/v1/devices/pair/start', { body: { device_name: deviceName } })
+  ).json()) as PairStart
+  await request('/v1/devices/pair/confirm', {
+    body: { user_code: start.user_code },
+    headers: { cookie },
+  })
+  const poll = await request('/v1/devices/pair/poll', { body: { device_code: start.device_code } })
+  const { device_token } = (await poll.json()) as { device_token: string }
+  return device_token
+}

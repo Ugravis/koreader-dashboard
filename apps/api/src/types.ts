@@ -4,5 +4,6 @@ export type AppEnv = {
   Variables: {
     user: AuthUser
     session: AuthSession
+    device: { id: string; userId: string }
   }
 }
