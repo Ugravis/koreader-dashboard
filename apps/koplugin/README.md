@@ -28,7 +28,10 @@ Submodules live in `kodashboard/` because KOReader appends every plugin dir to t
 
 ## Link the device
 
-1. **Server URL**: for local development, `http://<mac-lan-ip>:8787` (the API listens on `0.0.0.0`). Set `WEB_ORIGIN` in `apps/api/.env` to an address the phone can open (`http://<mac-lan-ip>:3000`), since it is used in the link URL and QR code.
+1. Same Wi-Fi for the Mac, the Kindle and the phone. Use the Mac LAN IP (`ipconfig getifaddr en0`) everywhere, never `localhost` (session cookies are bound to the host):
+   - `apps/api/.env`: `API_URL=http://<mac-lan-ip>:8787`, `WEB_ORIGIN=http://<mac-lan-ip>:3000` (used in the link URL and QR code)
+   - `apps/web/.env.local`: `NEXT_PUBLIC_API_URL=http://<mac-lan-ip>:8787`
+   - Plugin **Server URL**: `http://<mac-lan-ip>:8787`, or pre-create `koreader/settings/koreader-dashboard-ulysse.lua` with `return { ["server_url"] = "http://<mac-lan-ip>:8787" }` over USB.
 2. **Link this device**: shows a code and a QR code. Open the URL, sign in, enter the code. The plugin polls until the code is confirmed or expires (10 min).
 3. **Unlink device** forgets the token locally. Revoke it from the website to invalidate it server side.
 
