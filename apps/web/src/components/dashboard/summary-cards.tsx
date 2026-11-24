@@ -1,6 +1,6 @@
 'use client'
 
-import { BookOpen, Clock, FileText } from 'lucide-react'
+import { BookCheck, BookOpen, Clock, FileText } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { buttonVariants } from '@/components/ui/button'
@@ -40,13 +40,14 @@ export function SummaryCards() {
   const s = state.status === 'ready' ? state.summary : null
   const cards = [
     { label: 'Books', icon: BookOpen, value: s && formatNumber(s.books_count) },
+    { label: 'Finished', icon: BookCheck, value: s && formatNumber(s.finished_count) },
     { label: 'Total reading time', icon: Clock, value: s && formatDuration(s.total_read_seconds) },
     { label: 'Pages read', icon: FileText, value: s && formatNumber(s.total_pages_read) },
   ]
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         {cards.map(({ label, icon: Icon, value }) => (
           <Card key={label}>
             <CardHeader>
@@ -57,7 +58,7 @@ export function SummaryCards() {
               {value === null ? (
                 <Skeleton className="h-8 w-24" />
               ) : (
-                <CardTitle className="text-2xl font-semibold tabular-nums sm:text-3xl">
+                <CardTitle className="text-xl font-semibold tabular-nums sm:text-2xl">
                   {value}
                 </CardTitle>
               )}

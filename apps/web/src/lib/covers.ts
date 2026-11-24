@@ -1,6 +1,6 @@
 /**
- * Book covers from Open Library, searched by title and author from the browser.
- * Results (including "no cover") are cached in localStorage by book md5.
+ * Book covers from Open Library, from the browser: by ISBN when KOReader has one, else a
+ * search by title and author. Search results (including "no cover") are cached by md5.
  */
 
 const CACHE_KEY = 'kd-covers-v1'
@@ -58,3 +58,7 @@ export function findCover(book: { md5: string; title: string; authors: string | 
   pending.set(book.md5, promise)
   return promise
 }
+
+/** Direct cover by ISBN; 404 (default=false) when Open Library has none. */
+export const isbnCoverUrl = (isbn: string) =>
+  `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg?default=false`
