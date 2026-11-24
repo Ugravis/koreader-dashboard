@@ -9,7 +9,7 @@ local Device = require("device")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
-local QRScreen = require("kodashboard/qrscreen")
+local Page = require("kodashboard/page")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -52,7 +52,7 @@ function Pairing:start()
         self.settings:set("web_url", data.web_url)
     end
 
-    self.dialog = QRScreen:new({
+    self.dialog = Page:new({
         text = T(
             _("Link this e-reader to KOReader Dashboard.\n\nScan the QR code with your phone, or open %1 and enter:"),
             data.verification_url

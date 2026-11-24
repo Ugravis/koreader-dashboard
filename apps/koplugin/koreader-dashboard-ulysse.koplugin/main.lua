@@ -11,7 +11,7 @@ local datetime = require("datetime")
 -- Submodules are namespaced: plugin dirs end up in the global package.path.
 local Api = require("kodashboard/api")
 local Pairing = require("kodashboard/pairing")
-local QRScreen = require("kodashboard/qrscreen")
+local Page = require("kodashboard/page")
 local Settings = require("kodashboard/settings")
 local Sync = require("kodashboard/sync")
 
@@ -27,9 +27,12 @@ function Dashboard:init()
     self.api = Api:new({
         settings = self.settings,
         on_unauthorized = function()
-            UIManager:show(InfoMessage:new({
-                text = _("This device was unlinked from KOReader Dashboard. Link it again to keep syncing."),
-            }))
+            self:refreshMenu()
+            self:showWelcome(
+                _("This e-reader was unlinked"),
+                _("It was revoked from the KOReader Dashboard website, so reading statistics no longer sync.\n\n"
+                    .. "Link it again to resume. Statistics already sent are kept.")
+            )
         end,
     })
     self.pairing = Pairing:new({
@@ -46,7 +49,20 @@ function Dashboard:init()
 
     if not self.settings:isLinked() and not self.settings:get("onboarding_shown") then
         UIManager:nextTick(function()
-            self:showOnboarding()
+            -- FileManager and ReaderUI both load the plugin: show it once.
+            if self.settings:get("onboarding_shown") or self.settings:isLinked() then
+                return
+            end
+            self.settings:set("onboarding_shown", true)
+            self:showWelcome(
+                _("Welcome to KOReader Dashboard"),
+                _("Sync your reading statistics to your account and follow your reading on the website: "
+                    .. "books, reading time, progress.\n\n"
+                    .. "1. Tap Link now: a code and a QR code appear.\n"
+                    .. "2. Scan the QR code with your phone (or open the link) and sign in.\n"
+                    .. "3. Confirm the code. Statistics sync right away, then automatically.\n\n"
+                    .. "You can do it later from Tools > KOReader Dashboard.")
+            )
         end)
     end
 end
@@ -57,24 +73,31 @@ function Dashboard:refreshMenu()
     end
 end
 
---- One-time panel after installing the plugin.
-function Dashboard:showOnboarding()
-    -- FileManager and ReaderUI both load the plugin: show it once.
-    if self.settings:get("onboarding_shown") or self.settings:isLinked() then
-        return
-    end
-    self.settings:set("onboarding_shown", true)
-    UIManager:show(ConfirmBox:new({
-        text = _("KOReader Dashboard is installed.\n\n"
-            .. "Link this e-reader to your account to sync your reading statistics. "
-            .. "A code and a QR code will be shown: open the link on your phone.\n\n"
-            .. "You can also do it later from Tools > KOReader Dashboard."),
-        ok_text = _("Link now"),
-        cancel_text = _("Later"),
-        ok_callback = function()
-            self:link()
-        end,
-    }))
+--- Full-screen page with Link now / Later (first start, or after a revoke).
+function Dashboard:showWelcome(title, text)
+    local page
+    page = Page:new({
+        title = title,
+        text = text,
+        buttons = {
+            {
+                {
+                    text = _("Later"),
+                    callback = function()
+                        UIManager:close(page)
+                    end,
+                },
+                {
+                    text = _("Link now"),
+                    callback = function()
+                        UIManager:close(page)
+                        self:link()
+                    end,
+                },
+            },
+        },
+    })
+    UIManager:show(page)
 end
 
 function Dashboard:onCloseWidget()
@@ -160,6 +183,7 @@ function Dashboard:syncNow(on_done)
             text = T(_("Sync failed: %1"), res.err)
         end
         UIManager:show(InfoMessage:new({ text = text, timeout = res.ok and 3 or nil }))
+        self:refreshMenu()
         if on_done then
             on_done()
         end
@@ -181,7 +205,7 @@ end
 function Dashboard:showWebsite()
     local url = self.settings:get("web_url")
     local screen
-    screen = QRScreen:new({
+    screen = Page:new({
         text = T(_("Open %1 on your phone or computer to see your reading statistics."), url),
         url = url,
         buttons = {
@@ -332,7 +356,11 @@ end
 
 function Dashboard:addToMainMenu(menu_items)
     menu_items.koreader_dashboard = {
-        text = _("KOReader Dashboard"),
+        -- Status in the Tools menu itself: TouchMenu items cannot be styled.
+        text_func = function()
+            return self.settings:isLinked() and _("KOReader Dashboard · linked")
+                or _("KOReader Dashboard · not linked")
+        end,
         sorting_hint = "tools",
         sub_item_table = {
             {
@@ -424,15 +452,12 @@ function Dashboard:addToMainMenu(menu_items)
                 keep_menu_open = true,
                 callback = function()
                     UIManager:show(InfoMessage:new({
-                        text = T(_("KOReader Dashboard v%1\nSyncs your reading statistics."), VERSION),
+                        text = T(
+                            _("KOReader Dashboard v%1\nSyncs your reading statistics.\n\n"
+                                .. "Developed by Ulysse Pennetier."),
+                            VERSION
+                        ),
                     }))
-                end,
-                separator = true,
-            },
-            {
-                text = _("Developed by Ulysse Pennetier"),
-                enabled_func = function()
-                    return false
                 end,
             },
         },

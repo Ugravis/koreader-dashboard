@@ -13,7 +13,7 @@ koreader-dashboard-ulysse.koplugin/
   kodashboard/settings.lua LuaSettings in settings/koreader-dashboard-ulysse.lua
   kodashboard/api.lua      HTTP + JSON (socketutil timeouts, 401 unlinks the device)
   kodashboard/pairing.lua  link flow: code + QR, polling
-  kodashboard/qrscreen.lua full-screen page with a large QR code
+  kodashboard/page.lua     full-screen page (welcome, pairing code + QR code, website QR code)
   kodashboard/stats.lua    read-only statistics.sqlite3 reads (batches of 5,000)
   kodashboard/sync.lua     incremental sync, throttle, cursor
 ```
@@ -33,7 +33,7 @@ Submodules live in `kodashboard/` because KOReader appends every plugin dir to t
    - `apps/api/.env`: `API_URL=http://<mac-lan-ip>:8787`, `WEB_ORIGIN=http://<mac-lan-ip>:3000` (used in the link URL and QR code)
    - `apps/web/.env.local`: `NEXT_PUBLIC_API_URL=http://<mac-lan-ip>:8787`
    - Plugin **Server URL**: `http://<mac-lan-ip>:8787`, or pre-create `koreader/settings/koreader-dashboard-ulysse.lua` with `return { ["server_url"] = "http://<mac-lan-ip>:8787" }` over USB.
-2. **Link this device** (also offered once by a panel at first startup): shows a code and a large QR code on the same screen. Open the URL, sign in, enter the code. The plugin polls until the code is confirmed or expires (10 min).
+2. **Link this device** (also offered once by a full-screen welcome page at first startup): shows a code and a large QR code on the same screen. Open the URL, sign in, enter the code. The plugin polls until the code is confirmed or expires (10 min).
 3. A first sync runs right after linking.
 4. **Unlink device** revokes the device on the server when online (it leaves the website list) and forgets the token. A device revoked from the website is unlinked at its next sync.
 

@@ -1,8 +1,8 @@
 --[[--
-Full-screen page with instructions, an optional big code, a large QR code and buttons.
+Full-screen page: title, text, optional big code, optional QR code, footer and buttons.
 
-KOReader's QRMessage scales modules by an integer factor and adds a title bar, which made
-the code look small on the Kindle: this widget sizes the QR code from the screen instead.
+Used for the welcome page, the pairing page and the website QR code. KOReader's QRMessage
+gave no control over the QR code size.
 ]]
 
 local Blitbuffer = require("ffi/blitbuffer")
@@ -21,20 +21,31 @@ local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local Screen = Device.screen
 
-local QRScreen = InputContainer:extend({
-    text = nil, -- instructions, above the code
+local Page = InputContainer:extend({
+    title = nil, -- large, bold
+    text = nil, -- body, above the code
     code = nil, -- optional, shown big
-    url = nil, -- QR code content
+    url = nil, -- optional QR code content
     footer = nil, -- optional, below the QR code
     buttons = nil, -- ButtonTable rows
 })
 
-function QRScreen:init()
+function Page:init()
     local sw, sh = Screen:getWidth(), Screen:getHeight()
     local inner_w = math.floor(math.min(sw, sh) * 0.9)
     local gap = Screen:scaleBySize(16)
 
     local group = VerticalGroup:new({ align = "center" })
+    if self.title then
+        table.insert(group, TextBoxWidget:new({
+            text = self.title,
+            face = Font:getFace("tfont", 30),
+            bold = true,
+            width = inner_w,
+            alignment = "center",
+        }))
+        table.insert(group, VerticalSpan:new({ width = gap * 2 }))
+    end
     if self.text then
         table.insert(group, TextBoxWidget:new({
             text = self.text,
@@ -53,10 +64,12 @@ function QRScreen:init()
         table.insert(group, VerticalSpan:new({ width = gap }))
     end
 
-    -- Leave room for the texts and buttons: up to 90% of the width, 55% of the height.
-    local qr_size = math.floor(math.min(inner_w, sh * 0.55))
-    self.qr = QRWidget:new({ text = self.url, width = qr_size, height = qr_size })
-    table.insert(group, self.qr)
+    if self.url then
+        -- About 45% of the short side: easy to scan, leaves room for the texts.
+        local qr_size = math.floor(math.min(sw, sh) * 0.45)
+        self.qr = QRWidget:new({ text = self.url, width = qr_size, height = qr_size })
+        table.insert(group, self.qr)
+    end
 
     if self.footer then
         table.insert(group, VerticalSpan:new({ width = gap }))
@@ -89,15 +102,15 @@ function QRScreen:init()
     self[1] = self.frame
 end
 
-function QRScreen:onShow()
-    -- Full refresh: no e-ink ghosting on the QR code.
+function Page:onShow()
+    -- Full refresh: no e-ink ghosting.
     UIManager:setDirty(self, function()
         return "full", self.frame.dimen
     end)
     return true
 end
 
-function QRScreen:onCloseWidget()
+function Page:onCloseWidget()
     if self.qr and self.qr.free then
         self.qr:free()
     end
@@ -106,4 +119,4 @@ function QRScreen:onCloseWidget()
     end)
 end
 
-return QRScreen
+return Page
