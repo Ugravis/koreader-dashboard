@@ -56,7 +56,7 @@ Automatic syncs: at most one every 5 minutes, never turn Wi-Fi on unless **Allow
 
 ### Library (sidecars)
 
-After the page stats, each sync reads the sidecar (`metadata.<ext>.lua`) of the books in the reading history and in the home folder, and sends those changed since the last successful send to `/v1/library`: reading status (reading / finished / on hold, also when set from the file browser), KOReader's percent, rating and review, metadata (series, language, keywords, identifiers, description), file path, and every highlight and note (text, note, chapter, page, date). Sidecars are read with `dofile`, never written.
+After the page stats, each sync reads the sidecar (`metadata.<ext>.lua`) of the books in the reading history and in the home folder, and sends those changed since the last successful send to `/v1/library`: reading status (reading / finished / on hold, also when set from the file browser), KOReader's percent, rating and review, metadata (series, language, keywords, identifiers, description), file path, and every highlight and note (text, note, chapter, page, date). Sidecars are read with `dofile`, never written. Books never opened (no sidecar) are sent too, as "new": metadata from the Cover Browser cache when available, else from the file name (`Title - Author.ext`), md5 from `util.partialMD5`.
 
 ## Debug
 

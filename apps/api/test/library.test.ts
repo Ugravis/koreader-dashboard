@@ -100,4 +100,26 @@ describe('library', () => {
     expect(bad.status).toBe(400)
     expect((await post('/v1/library', 'kdt_wrong', { books: [] })).status).toBe(401)
   })
+
+  it('replaces an unopened placeholder once the book is opened', async () => {
+    const { cookie } = await signUp()
+    const token = await pairDevice(cookie)
+    const file_path = '/mnt/us/documents/Books/After, Tome 1 - Anna Todd.epub'
+    // Never opened: identity from the file name.
+    await post('/v1/library', token, {
+      books: [{ md5: 'c10e', title: 'After, Tome 1', authors: 'Anna Todd', file_path }],
+    })
+    // Opened: real identity from the document, status from the sidecar.
+    await post('/v1/library', token, {
+      books: [
+        { md5: 'c10e', title: 'After - 1', authors: 'Anna Todd', file_path, status: 'reading' },
+      ],
+    })
+    const rows = await db.select().from(schema.books)
+    expect(rows.map((b) => b.title)).toEqual(['After - 1'])
+    const { books } = (await (await request('/v1/me/books', { headers: { cookie } })).json()) as {
+      books: Record<string, unknown>[]
+    }
+    expect(books).toHaveLength(1)
+  })
 })

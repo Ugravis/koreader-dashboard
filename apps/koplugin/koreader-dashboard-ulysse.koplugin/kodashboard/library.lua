@@ -2,8 +2,9 @@
 Book sidecars (metadata.<ext>.lua): reading status, KOReader progress, metadata, annotations.
 
 Books come from the reading history and the home folder. Sidecars are read with dofile,
-read-only (DocSettings:open may delete invalid candidates). Only sidecars changed since the
-last successful send are sent.
+read-only (DocSettings:open may delete invalid candidates). Books never opened have no
+sidecar: their metadata comes from the Cover Browser cache (BookInfoManager), else from the
+file name. Only books changed since the last successful send are sent.
 ]]
 
 local DocSettings = require("docsettings")
@@ -69,7 +70,12 @@ local function walk(dir, out, seen, depth)
                 if not name:match("%.sdr$") then
                     walk(path, out, seen, depth + 1)
                 end
-            elseif mode == "file" and not seen[path] and DocumentRegistry:hasProvider(path) then
+            elseif
+                mode == "file"
+                and not seen[path]
+                and DocumentRegistry:hasProvider(path)
+                and not DocumentRegistry:isImageFile(path)
+            then
                 seen[path] = true
                 table.insert(out, path)
             end
@@ -157,13 +163,67 @@ function Library.bookFromSidecar(path, data)
     }
 end
 
---- Sidecars changed since the last send: { { path, mtime, book } }.
+-- Cover Browser's metadata cache, when that plugin is enabled (its dir is in package.path).
+local function bookInfoManager()
+    if Library.bim == nil then
+        local ok, bim = pcall(require, "bookinfomanager")
+        Library.bim = ok and type(bim) == "table" and bim.getDocProps and bim or false
+    end
+    return Library.bim or nil
+end
+
+--- Calibre names files "Title - Author.ext".
+function Library.propsFromFilename(path)
+    local name = (path:match("([^/]+)$") or path):gsub("%.[^.]+$", "")
+    local title, authors = name:match("^(.-) %- (.+)$")
+    return { title = title or name, authors = authors }
+end
+
+--- Payload for a book never opened (no sidecar), or nil.
+function Library.bookFromFile(path)
+    local ok, md5 = pcall(util.partialMD5, path)
+    if not ok or not md5 then
+        return nil
+    end
+    local props
+    local bim = bookInfoManager()
+    if bim then
+        local got, info = pcall(bim.getDocProps, bim, path)
+        props = got and type(info) == "table" and info or nil
+    end
+    local fallback = Library.propsFromFilename(path)
+    props = props or {}
+    return {
+        md5 = md5,
+        title = str(props.title) or fallback.title,
+        authors = str(props.authors) or fallback.authors,
+        series = str(props.series),
+        series_index = tonumber(props.series_index),
+        language = str(props.language),
+        keywords = str(props.keywords),
+        description = str(props.description),
+        pages = int(props.pages),
+        file_path = path,
+    }
+end
+
+--- Books changed since the last send: { { path, mtime, book } }.
+--- `sent[path]` is the sidecar mtime, or "new:<file mtime>" for a book never opened.
 function Library.collectChanged(sent)
     local changed = {}
     for _, path in ipairs(Library.listFiles()) do
         local sidecar = DocSettings:findSidecarFile(path)
         local mtime = sidecar and lfs.attributes(sidecar, "modification")
-        if mtime and sent[path] ~= mtime then
+        if not sidecar then
+            local file_mtime = lfs.attributes(path, "modification")
+            local marker = file_mtime and ("new:" .. file_mtime)
+            if marker and sent[path] ~= marker then
+                local book = Library.bookFromFile(path)
+                if book then
+                    table.insert(changed, { path = path, mtime = marker, book = book })
+                end
+            end
+        elseif mtime and sent[path] ~= mtime then
             local ok, data = pcall(dofile, sidecar)
             if ok and type(data) == "table" then
                 local book = Library.bookFromSidecar(path, data)

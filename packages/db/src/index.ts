@@ -22,6 +22,7 @@ export {
   inArray,
   isNull,
   max,
+  notInArray,
   sql,
   sum,
 } from 'drizzle-orm'
