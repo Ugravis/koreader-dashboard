@@ -19,6 +19,10 @@ local DEFAULTS = {
     allow_wifi = false,
     last_sync_time = nil,
     last_sync_rows = nil,
+    -- Website base URL, returned by the API when linking or checking the device status.
+    web_url = nil,
+    -- One-time onboarding panel at startup.
+    onboarding_shown = false,
 }
 
 local Settings = {
