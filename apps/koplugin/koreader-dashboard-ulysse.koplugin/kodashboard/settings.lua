@@ -58,6 +58,14 @@ function Settings:set(key, value)
     self.data:flush()
 end
 
+--- Sets several keys, written to disk once.
+function Settings:setMany(values)
+    for key, value in pairs(values) do
+        self.data:saveSetting(key, value)
+    end
+    self.data:flush()
+end
+
 function Settings:isLinked()
     return self:get("device_token") ~= nil
 end

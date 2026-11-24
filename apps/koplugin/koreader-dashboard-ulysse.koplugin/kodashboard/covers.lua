@@ -12,7 +12,26 @@ local logger = require("logger")
 local Covers = {
     -- Same limit as the API: larger covers are not sent.
     MAX_BYTES = 8 * 1024 * 1024,
+    -- When set (sync subprocess), crengine uses this cache dir instead of the reader's own.
+    cache_dir = nil,
+    cache_ready = false,
 }
+
+-- Same as Cover Browser's extraction subprocess: books opened here must not touch the cache
+-- of the book being read in the parent process.
+local function isolateCache()
+    if not Covers.cache_dir or Covers.cache_ready then
+        return
+    end
+    Covers.cache_ready = true
+    local ok, err = pcall(function()
+        local cre = require("document/credocument"):engineInit()
+        cre.initCache(Covers.cache_dir, 0, true, G_reader_settings:readSetting("cre_storage_size_factor") or 20)
+    end)
+    if not ok then
+        logger.warn("KOReaderDashboard: cannot isolate crengine cache", err)
+    end
+end
 
 local function attr(tag, name)
     return tag:match("%s" .. name .. '%s*=%s*"([^"]*)"') or tag:match("%s" .. name .. "%s*=%s*'([^']*)'")
@@ -115,6 +134,7 @@ function Covers.fromCrengine(path)
     if not provider or provider.provider ~= "crengine" then
         return nil
     end
+    isolateCache()
     local doc = DocumentRegistry:openDocument(path, provider)
     if not doc then
         return nil

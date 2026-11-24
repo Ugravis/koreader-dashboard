@@ -164,36 +164,45 @@ function Dashboard:unschedulePeriodic()
 end
 
 --- Manual sync: bypasses the throttle, may turn Wi-Fi on (KOReader prompts per its own settings).
+--- Runs in the background: the result is shown when it ends.
 function Dashboard:syncNow(on_done)
     if not self.settings:isLinked() then
         UIManager:show(InfoMessage:new({ text = _("Link this device first.") }))
         return
     end
+    if Sync:isRunning() then
+        UIManager:show(InfoMessage:new({ text = _("A sync is already running."), timeout = 3 }))
+        return
+    end
     NetworkMgr:runWhenOnline(function()
-        local progress = InfoMessage:new({ text = _("Syncing reading statistics…") })
-        UIManager:show(progress)
-        UIManager:forceRePaint()
-        local res = Sync:run()
-        UIManager:close(progress)
-        if not self.settings:isLinked() then
-            -- Revoked from the website: Api already told the user.
-            self:refreshMenu()
-            return
-        end
-        local text
-        if res.ok and res.nothing then
-            text = _("Already up to date.")
-        elseif res.ok then
-            text = T(_("Sync done: %1 pages and %2 books sent."), res.rows, res.books or 0)
-        else
-            text = T(_("Sync failed: %1"), res.err)
-        end
-        UIManager:show(InfoMessage:new({ text = text, timeout = res.ok and 3 or nil }))
-        self:refreshMenu()
-        if on_done then
-            on_done()
+        local started = Sync:start(function(res)
+            self:showSyncResult(res, on_done)
+        end)
+        if started then
+            UIManager:show(InfoMessage:new({ text = _("Syncing reading statistics…"), timeout = 2 }))
         end
     end)
+end
+
+function Dashboard:showSyncResult(res, on_done)
+    if not self.settings:isLinked() then
+        -- Revoked from the website: the unlink popup was already shown.
+        self:refreshMenu()
+        return
+    end
+    local text
+    if res.ok and res.nothing then
+        text = _("Already up to date.")
+    elseif res.ok then
+        text = T(_("Sync done: %1 pages and %2 books sent."), res.rows, res.books or 0)
+    else
+        text = T(_("Sync failed: %1"), res.err)
+    end
+    UIManager:show(InfoMessage:new({ text = text, timeout = res.ok and 3 or nil }))
+    self:refreshMenu()
+    if on_done then
+        on_done()
+    end
 end
 
 function Dashboard:lastSyncText()
