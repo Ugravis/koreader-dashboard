@@ -14,7 +14,19 @@ export function BookStatusBadge({
   status: BookStatus | null
   className?: string
 }) {
-  if (!status) return null
+  if (!status) {
+    // No status and no reading session: never opened in KOReader.
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-xs font-medium text-muted-foreground',
+          className,
+        )}
+      >
+        New
+      </span>
+    )
+  }
   return (
     <span
       className={cn(

@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
-import { inArray, schema, sql } from '@koreader-dashboard/db'
+import { and, eq, inArray, notInArray, schema, sql } from '@koreader-dashboard/db'
 import { db } from '../db.ts'
 import { HttpError } from '../lib/errors.ts'
 import { errorResponse } from '../lib/openapi.ts'
@@ -74,7 +74,7 @@ const syncLibrary = createRoute({
   },
 })
 
-const { books, annotations } = schema
+const { books, annotations, pageStats } = schema
 const key = (b: { md5: string; title: string; authors?: string | null }) =>
   JSON.stringify([b.md5, b.title, b.authors ?? null])
 
@@ -139,6 +139,24 @@ export const libraryRoutes = new OpenAPIHono<AppEnv>().openapi(syncLibrary, asyn
         },
       })
       .returning({ id: books.id, md5: books.md5, title: books.title, authors: books.authors })
+
+    // A book first sent unopened (identity from the file name or Cover Browser) gets its real
+    // identity once opened: drop the placeholder, same file, never read and without annotations.
+    const ids = upserted.map((b) => b.id)
+    const paths = unique.map((b) => b.file_path).filter((p): p is string => Boolean(p))
+    if (paths.length > 0) {
+      await tx
+        .delete(books)
+        .where(
+          and(
+            eq(books.userId, userId),
+            inArray(books.filePath, paths),
+            notInArray(books.id, ids),
+            sql`NOT EXISTS (SELECT 1 FROM ${pageStats} p WHERE p.book_id = ${books.id})`,
+            sql`NOT EXISTS (SELECT 1 FROM ${annotations} a WHERE a.book_id = ${books.id})`,
+          ),
+        )
+    }
 
     // Annotations: the sidecar list is the source of truth, replace it per book.
     const idByKey = new Map(upserted.map((b) => [key(b), b.id]))
