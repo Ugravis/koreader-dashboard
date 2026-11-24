@@ -28,11 +28,15 @@ function Dashboard:init()
         settings = self.settings,
         on_unauthorized = function()
             self:refreshMenu()
-            self:showWelcome(
-                _("This e-reader was unlinked"),
-                _("It was revoked from the KOReader Dashboard website, so reading statistics no longer sync.\n\n"
-                    .. "Link it again to resume. Statistics already sent are kept.")
-            )
+            UIManager:show(ConfirmBox:new({
+                text = _("This e-reader was unlinked from KOReader Dashboard (revoked from the website).\n\n"
+                    .. "Link it again to resume syncing. Statistics already sent are kept."),
+                ok_text = _("Link now"),
+                cancel_text = _("Later"),
+                ok_callback = function()
+                    self:link()
+                end,
+            }))
         end,
     })
     self.pairing = Pairing:new({
@@ -73,7 +77,7 @@ function Dashboard:refreshMenu()
     end
 end
 
---- Full-screen page with Link now / Later (first start, or after a revoke).
+--- Full-screen welcome page with Link now / Later (first start).
 function Dashboard:showWelcome(title, text)
     local page
     page = Page:new({
