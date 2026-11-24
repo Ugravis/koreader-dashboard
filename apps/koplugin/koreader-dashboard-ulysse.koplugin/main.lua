@@ -85,7 +85,9 @@ function Dashboard:editServerUrl(on_done)
                     callback = function()
                         local value = dialog:getInputText():gsub("^%s+", ""):gsub("%s+$", ""):gsub("/+$", "")
                         if value ~= "" and not value:match("^https?://[%w%.%-]+") then
-                            UIManager:show(InfoMessage:new({ text = _("Enter a URL starting with http:// or https://") }))
+                            UIManager:show(InfoMessage:new({
+                                text = _("Enter a URL starting with http:// or https://"),
+                            }))
                             return
                         end
                         local changed = value ~= (self.settings:get("server_url") or "")
