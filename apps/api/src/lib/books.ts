@@ -10,6 +10,7 @@ export type BookRow = {
   series_index: number | null
   language: string | null
   identifiers: string | null
+  keywords: string | null
   description: string | null
   pages: number | null
   status: string | null
@@ -39,6 +40,9 @@ export type BookGroup = {
   series_index: number | null
   language: string | null
   isbn: string | null
+  /** Genres and tags from the book metadata. */
+  keywords: string[]
+  pages: number | null
   /** Path of the cover sent by the plugin, versioned for caching; null when none. */
   cover_url: string | null
   description: string | null
@@ -59,7 +63,7 @@ const { books, bookCovers, pageStats, annotations } = schema
 export async function loadBookRows(db: Db, userId: string) {
   const res = await db.execute<BookRow>(sql`
     SELECT b.id, b.md5, b.title, b.authors, b.series, b.series_index, b.language, b.identifiers,
-           b.description, b.pages, b.status, b.status_modified, b.percent_finished, b.rating,
+           b.keywords, b.description, b.pages, b.status, b.status_modified, b.percent_finished, b.rating,
            b.review, b.library_updated_at,
            coalesce(t.seconds, 0) AS total_read_seconds,
            coalesce(t.pages_read, 0) AS pages_read,
@@ -96,6 +100,17 @@ export function parseIsbn(identifiers: string | null) {
     /\b(97[89][0-9]{10})\b/.exec(identifiers)
   const isbn = match?.[1]?.replace(/-/g, '')
   return isbn && (isbn.length === 10 || isbn.length === 13) ? isbn : null
+}
+
+/** KOReader keywords: one per line, sometimes comma or semicolon separated. */
+export function parseKeywords(keywords: string | null) {
+  if (!keywords) return []
+  const seen = new Map<string, string>()
+  for (const raw of keywords.split(/[\n;,]/)) {
+    const k = raw.trim()
+    if (k && !seen.has(k.toLowerCase())) seen.set(k.toLowerCase(), k)
+  }
+  return [...seen.values()]
 }
 
 const norm = (s: string | null) => (s ?? '').trim().toLowerCase()
@@ -157,6 +172,8 @@ export function groupBooks(rows: BookRow[]): BookGroup[] {
         series_index: pick('series_index'),
         language: pick('language'),
         isbn: members.map((m) => parseIsbn(m.identifiers)).find(Boolean) ?? null,
+        keywords: parseKeywords(pick('keywords')),
+        pages: pick('pages') ?? primary.last_total_pages,
         cover_url: coverAt ? `/v1/me/books/${primary.id}/cover?v=${coverAt}` : null,
         description: pick('description'),
         status: complete

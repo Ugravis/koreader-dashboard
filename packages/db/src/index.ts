@@ -26,6 +26,7 @@ export {
   notInArray,
   sql,
   sum,
+  type SQL,
 } from 'drizzle-orm'
 
 const MIGRATIONS_FOLDER = new URL('../drizzle', import.meta.url).pathname

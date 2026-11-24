@@ -8,7 +8,7 @@ import { errorResponse } from '../lib/openapi.ts'
 import { requireSession } from '../middleware/session.ts'
 import type { AppEnv } from '../types.ts'
 
-const json = <T extends z.ZodType>(schema: T, description: string) => ({
+export const json = <T extends z.ZodType>(schema: T, description: string) => ({
   content: { 'application/json': { schema } },
   description,
 })
@@ -37,6 +37,8 @@ const BookSchema = z
     series_index: z.number().nullable(),
     language: z.string().nullable(),
     isbn: z.string().nullable(),
+    keywords: z.array(z.string()).openapi({ description: 'Genres and tags' }),
+    pages: z.number().int().nullable(),
     cover_url: z
       .string()
       .nullable()
@@ -126,6 +128,17 @@ const getSummary = createRoute({
   responses: { 200: json(SummarySchema, 'Totals'), 401: errorResponse('Not signed in') },
 })
 
+const SecondsPages = { seconds: z.number().int(), pages: z.number().int() }
+
+export const SessionSummarySchema = z
+  .object({
+    count: z.number().int(),
+    average_seconds: z.number().int(),
+    longest_seconds: z.number().int(),
+    longest_on: z.string().nullable(),
+  })
+  .openapi('SessionSummary')
+
 const DayStatSchema = z.object({
   date: z.string().openapi({ example: '2026-11-24' }),
   seconds: z.number().int(),
@@ -138,6 +151,20 @@ const StatsSchema = z
     days: z.array(DayStatSchema).openapi({ description: 'Last days, oldest first' }),
     by_hour: z.array(z.number().int()).openapi({ description: 'Seconds per hour, 0-23' }),
     by_weekday: z.array(z.number().int()).openapi({ description: 'Seconds per day, Monday first' }),
+    by_weekday_hour: z
+      .array(z.array(z.number().int()))
+      .openapi({ description: 'Seconds per weekday (Monday first) and hour' }),
+    by_month: z.array(
+      z.object({ month: z.string().openapi({ example: '2026-11' }), ...SecondsPages }),
+    ),
+    sessions: SessionSummarySchema,
+    records: z.object({
+      best_day: z.object({ date: z.string(), seconds: z.number().int() }).nullable(),
+      best_month: z.object({ month: z.string(), seconds: z.number().int() }).nullable(),
+      fastest_book: z
+        .object({ id: z.uuid(), title: z.string(), days: z.number().int() })
+        .nullable(),
+    }),
     reading_days: z.number().int(),
     current_streak: z.number().int(),
     longest_streak: z.number().int(),

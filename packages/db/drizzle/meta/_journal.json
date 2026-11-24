@@ -29,6 +29,13 @@
       "when": 1795525901527,
       "tag": "0003_sync_status",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795532079735,
+      "tag": "0004_goals",
+      "breakpoints": true
     }
   ]
 }

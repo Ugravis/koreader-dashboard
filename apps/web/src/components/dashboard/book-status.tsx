@@ -51,7 +51,7 @@ export function ProgressBar({ value, label }: { value: number; label: string }) 
       aria-valuemin={0}
       aria-valuemax={100}
     >
-      <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+      <div className="h-full rounded-full bg-chart-1" style={{ width: `${percent}%` }} />
     </div>
   )
 }

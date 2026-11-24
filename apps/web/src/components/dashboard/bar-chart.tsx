@@ -1,9 +1,12 @@
+'use client'
+
+import { type Tip, useChartTooltip } from '@/components/charts/tooltip'
 import { cn } from '@/lib/utils'
 
-export type Bar = { key: string; value: number; label: string; tooltip: string }
+export type Bar = { key: string; value: number; label: string; tip: Tip }
 
 /**
- * Plain CSS bar chart. Each bar carries its value as tooltip and accessible label;
+ * Plain CSS bar chart. Hovering or focusing a bar (its whole column) shows its tooltip;
  * `tickEvery` thins the axis labels on dense charts.
  */
 export function BarChart({
@@ -17,6 +20,7 @@ export function BarChart({
   className?: string
   highlightLast?: boolean
 }) {
+  const { bind, layer, active } = useChartTooltip()
   const max = Math.max(1, ...bars.map((b) => b.value))
   return (
     <div className={cn('flex flex-col gap-2', className)}>
@@ -24,15 +28,19 @@ export function BarChart({
         {bars.map((bar, i) => (
           <li
             key={bar.key}
-            className="group relative flex h-full flex-1 items-end"
-            title={bar.tooltip}
-            aria-label={bar.tooltip}
+            className="relative flex h-full flex-1 items-end rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            {...bind(bar.key, bar.tip, { anchorChild: true })}
           >
             <div
               className={cn(
-                'w-full rounded-t-sm bg-primary/70 transition-colors group-hover:bg-primary',
-                bar.value === 0 && 'bg-muted group-hover:bg-muted-foreground/30',
-                highlightLast && i === bars.length - 1 && bar.value > 0 && 'bg-primary',
+                'w-full rounded-t-sm transition-colors',
+                bar.value === 0
+                  ? active === bar.key
+                    ? 'bg-muted-foreground/30'
+                    : 'bg-muted'
+                  : active === bar.key || (highlightLast && i === bars.length - 1)
+                    ? 'bg-chart-1'
+                    : 'bg-chart-1/70',
               )}
               style={{
                 height: bar.value === 0 ? '2px' : `${Math.max(3, (bar.value / max) * 100)}%`,
@@ -48,6 +56,7 @@ export function BarChart({
           </span>
         ))}
       </div>
+      {layer}
     </div>
   )
 }
